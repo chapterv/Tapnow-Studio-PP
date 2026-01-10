@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.7z
+*.zip
+*.exe
+.DS_Store
+thumbs.db
+Tapnow Studio-V*.html
+!Tapnow Studio-V3.7.32.html

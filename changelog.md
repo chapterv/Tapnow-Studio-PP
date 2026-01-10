@@ -4,6 +4,12 @@
 
 ## 📦 V3.7.x 系列 (智能分镜持续增强 API 错误处理与 Lightbox 优化)
 
+### V3.7.32 (Code Cleanup) - 2026-01-10
+**构建文件**: `Tapnow Studio-V3.7.32.html`
+- **[代码优化] 日志清理**: 移除了 200+ 条冗余的 `console.log` 调试信息（包括 `[Batch]`, `[Debug]` 等），仅保留核心错误日志与生命周期提示，显著净化了控制台输出。
+- **[性能微调]**: 减少了高频打印带来的浏览器控制台性能开销。
+- **[Hotfix] 安全修复**: 修复了视频生成时因 `blob:null` 导致的 Security Error。将内部图片管理 (`LocalImageManager`) 升级为严格使用 **Base64 Data URIs**，彻底绕过 `file:///` 协议下的跨域限制。
+
 ### V3.7.31 (Logic & Batch Stability) - 2026-01-10
 **历经 5 次内部迭代修复，当前构建文件**: `Tapnow Studio-V3.7.31.html`
 - **[P0 修复] 锁定镜头仍触发任务**: 彻底修复了灰色框锁定的镜头（`outputEnabled=true`）仍被加入批量队列的问题。批量生成逻辑现在会严格跳过已锁定镜头。

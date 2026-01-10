@@ -217,7 +217,6 @@ const LocalImageManager = (() => {
                 const request = store.put(record);
 
                 request.onsuccess = () => {
-                    console.log(`[LocalImageManager] Saved image: ${id} (${(blob.size / 1024).toFixed(1)}KB)`);
                     resolve(id);
                 };
 
@@ -251,9 +250,18 @@ const LocalImageManager = (() => {
                 request.onsuccess = () => {
                     const record = request.result;
                     if (record && record.blob) {
-                        const blobUrl = URL.createObjectURL(record.blob);
-                        blobUrlCache.set(id, blobUrl);
-                        resolve(blobUrl);
+                        // V3.7.32 Fix: Use FileReader to return Base64 avoiding blob:null security error in file:// protocol
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const base64 = reader.result;
+                            blobUrlCache.set(id, base64);
+                            resolve(base64);
+                        };
+                        reader.onerror = () => {
+                            console.error('[LocalImageManager] Failed to convert blob to base64');
+                            resolve(null);
+                        };
+                        reader.readAsDataURL(record.blob);
                     } else {
                         resolve(null);
                     }
@@ -272,9 +280,12 @@ const LocalImageManager = (() => {
         const db = await initDB();
         if (!db) return false;
 
-        // Revoke cached blob URL
+        // Revoke cached blob URL (only if it is a blob url)
         if (blobUrlCache.has(id)) {
-            URL.revokeObjectURL(blobUrlCache.get(id));
+            const url = blobUrlCache.get(id);
+            if (url && url.startsWith('blob:')) {
+                URL.revokeObjectURL(url);
+            }
             blobUrlCache.delete(id);
         }
 
@@ -487,7 +498,6 @@ const HistoryItem = memo(({
                     onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        console.log('[V3.5.1 Debug] Selection button clicked for:', item.id, 'current isSelected:', isSelected);
                         onSelect(item.id);
                     }}
                     className={`absolute bottom-2 right-2 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
@@ -1590,7 +1600,6 @@ const Lightbox = ({ item, onClose, onNavigate, onShotNavigate, onHistoryNavigate
                 e.stopPropagation();
                 const currentIndex = currentItem.selectedMjImageIndex !== undefined ? currentItem.selectedMjImageIndex : 0;
                 const prevIndex = currentIndex > 0 ? currentIndex - 1 : currentItem.mjImages.length - 1;
-                console.log('[Lightbox Debug] ArrowLeft:', { currentIndex, prevIndex, mjImagesLength: currentItem.mjImages.length, hasStoryboard: !!currentItem.storyboardContext });
                 if (prevIndex >= 0 && prevIndex < currentItem.mjImages.length && onNavigate) {
                     // V3.7.22: 立即更新 ref，避免快速按键时状态过时
                     itemRef.current = {
@@ -1607,7 +1616,6 @@ const Lightbox = ({ item, onClose, onNavigate, onShotNavigate, onHistoryNavigate
                 e.stopPropagation();
                 const currentIndex = currentItem.selectedMjImageIndex !== undefined ? currentItem.selectedMjImageIndex : 0;
                 const nextIndex = currentIndex < currentItem.mjImages.length - 1 ? currentIndex + 1 : 0;
-                console.log('[Lightbox Debug] ArrowRight:', { currentIndex, nextIndex, mjImagesLength: currentItem.mjImages.length, hasStoryboard: !!currentItem.storyboardContext });
                 if (nextIndex >= 0 && nextIndex < currentItem.mjImages.length && onNavigate) {
                     // V3.7.22: 立即更新 ref，避免快速按键时状态过时
                     itemRef.current = {
@@ -1861,7 +1869,6 @@ function TapnowApp() {
     // V3.7.26: Strict Batch Queue Processor (Wait for batch finish + 1s delay)
     // V3.7.29: Enhanced state machine logic + Debug logging
     useEffect(() => {
-        console.log(`[Batch] State check - Queue: ${batchQueue.length}, State: ${batchStateRef.current}, Tick: ${batchTick}`);
 
         if (batchQueue.length === 0) {
             batchStateRef.current = 'idle';
@@ -1919,7 +1926,6 @@ function TapnowApp() {
         if (batchStateRef.current === 'running') {
             // Just finished a batch
             batchStateRef.current = 'cooling';
-            console.log('[Batch] Batch finished. Cooling down 1s...');
             setTimeout(() => {
                 batchStateRef.current = 'idle';
                 setBatchTick(t => t + 1); // Trigger next batch
@@ -1937,7 +1943,6 @@ function TapnowApp() {
         const remaining = batchQueue.slice(batchSize);
 
         if (toProcess.length > 0) {
-            console.log(`[Batch] Starting new batch of ${toProcess.length} shots. Concurrency: ${batchConcurrency}`);
 
             // Update queue first
             setBatchQueue(remaining);
@@ -1968,7 +1973,6 @@ function TapnowApp() {
     useEffect(() => {
         if (batchQueue.length === 0) return;
         const interval = setInterval(() => {
-            console.log('[Batch] Periodic check triggered');
             setBatchTick(t => t + 1);
         }, 5000); // 每5秒检查一次
         return () => clearInterval(interval);
@@ -2168,18 +2172,12 @@ function TapnowApp() {
         apiBlacklistRef.current = { ...oldBlacklist, [key]: entry };
 
         // V3.5.1 Debug: 详细追踪黑名单更新
-        console.log('[V3.5.1 Debug] addToBlacklist called:');
-        console.log('  - Key ending:', '...' + key.slice(-6));
-        console.log('  - Reason:', reason);
-        console.log('  - Old blacklist size:', Object.keys(oldBlacklist).length);
-        console.log('  - New blacklist size:', Object.keys(apiBlacklistRef.current).length);
 
         // 异步更新 React 状态（用于持久化和 UI）
         setApiBlacklist(prev => ({
             ...prev,
             [key]: entry
         }));
-        console.log(`🚫 API Key "...${key.slice(-4)}" 已加入今日黑名单: ${reason}`);
     };
 
     // V3.7.23: API 临时暂停列表（用于登录失效等可恢复错误，TTL 60分钟）
@@ -2211,7 +2209,6 @@ function TapnowApp() {
         const entry = { reason, timestamp: Date.now(), ttl: ttlMs };
         apiSuspendListRef.current = { ...apiSuspendListRef.current, [key]: entry };
         setApiSuspendList(prev => ({ ...prev, [key]: entry }));
-        console.log(`⏳ API Key \"...${key.slice(-4)}\" 已暂停 ${ttlMs / 60000} 分钟: ${reason}`);
     };
 
     const isKeySuspended = (key) => {
@@ -2944,7 +2941,6 @@ function TapnowApp() {
                         }
                     }
 
-                    console.log(`Midjourney: 开始重新切割图片，任务ID: ${item.id}, 比例: ${ratio}`);
 
                     // 重新切割图片
                     splitMidjourneyImage(item.mjOriginalUrl, ratio).then((splitImages) => {
@@ -2967,7 +2963,6 @@ function TapnowApp() {
                         ));
 
                         splittingRef.current.delete(item.id);
-                        console.log(`Midjourney: 重新切割完成，任务ID: ${item.id}`);
                     }).catch((err) => {
                         console.error('Midjourney: 重新切割图片失败:', err);
                         splittingRef.current.delete(item.id);
@@ -3994,13 +3989,11 @@ function TapnowApp() {
                 else if (sourceNode.type === 'storyboard-node') {
                     const shots = sourceNode.settings?.shots || [];
                     const mode = sourceNode.settings?.mode || 'video';
-                    console.log(`[connectedImagesCache] storyboard-node ${sourceNode.id}: ${shots.length} shots, mode=${mode}`);
 
                     // V3.7.12: 遍历所有允许输出的镜头
                     shots.forEach(s => {
                         // V3.7.12: 只处理 outputEnabled=true 的镜头（灰色按钮控制）
                         if (!s.outputEnabled) {
-                            console.log(`[connectedImagesCache] Shot ${s.id} skipped: outputEnabled=false`);
                             return;
                         }
 
@@ -4010,9 +4003,7 @@ function TapnowApp() {
                             // 必须选中才输出 (idx >= 0)
                             if (idx >= 0 && s.output_images && s.output_images.length > 0 && s.output_images[idx]) {
                                 images.push(s.output_images[idx]);
-                                console.log(`[connectedImagesCache] Shot ${s.id} provides output_images[${idx}]`);
                             } else {
-                                console.log(`[connectedImagesCache] Shot ${s.id} skipped: selectedImageIndex=${idx} (no selection or no image)`);
                             }
                         }
                         // 视频模式或回退逻辑
@@ -4022,7 +4013,6 @@ function TapnowApp() {
                             images.push(s.image_url);
                         }
                     });
-                    console.log(`[connectedImagesCache] Storyboard provides ${images.length} enabled images`);
                 }
 
                 if (images.length > 0) {
@@ -4111,7 +4101,6 @@ function TapnowApp() {
                             isStoryboardInput: true
                         };
                         cache.set(conn.to, virtualVideoInput);
-                        console.log(`[connectedVideoInputCache] storyboard-node ${sourceNode.id} provides ${selectedFrames.length} keyframes to downstream`);
                     }
                 }
             }
@@ -4236,7 +4225,6 @@ function TapnowApp() {
 
         // 使用 ref 获取最新的 connections 状态，避免闭包问题
         const latestConnections = connectionsRef.current;
-        console.log('[Tapnow] updatePreviewFromTask: 更新预览窗口', { taskId, url, contentType, sourceNodeId, mjImages, filename });
 
         // 使用函数式更新，确保获取最新的 connections 状态
         setNodes((prevNodes) => {
@@ -4691,7 +4679,6 @@ function TapnowApp() {
                     const scale = maxSize / Math.max(originalWidth, originalHeight);
                     newWidth = Math.floor(originalWidth * scale);
                     newHeight = Math.floor(originalHeight * scale);
-                    console.log(`Midjourney: 缩放图片 ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight}`);
                 }
 
                 // 创建canvas并绘制
@@ -4716,12 +4703,10 @@ function TapnowApp() {
 
                 // 如果文件太大，降低质量
                 if (fileSizeMB > maxFileSizeMB) {
-                    console.log(`Midjourney: 图片文件大小 ${fileSizeMB.toFixed(2)}MB 超过限制，降低质量...`);
                     quality = 0.75;
                     dataUrl = canvas.toDataURL('image/jpeg', quality);
                     const newBase64Length = dataUrl.split(',')[1]?.length || 0;
                     const newFileSizeMB = (newBase64Length * 3 / 4) / (1024 * 1024);
-                    console.log(`Midjourney: 降低质量后文件大小 ${newFileSizeMB.toFixed(2)}MB`);
                 }
 
                 resolve(dataUrl);
@@ -4741,14 +4726,12 @@ function TapnowApp() {
     const uploadMidjourneyImages = async (base64Array, baseUrl, apiKey) => {
         try {
             // 先处理所有图片：压缩/缩放
-            console.log(`Midjourney: 准备上传 ${base64Array.length} 张图片，先进行压缩/缩放处理...`);
             const processedImages = await Promise.all(
                 base64Array.map(async (imageUrl, index) => {
                     // 如果是data URL，先压缩/缩放
                     if (imageUrl.startsWith('data:')) {
                         try {
                             const processed = await prepareImageForMidjourneyUpload(imageUrl, 2048, 8);
-                            console.log(`Midjourney: 图片[${index}]处理完成`);
                             return processed;
                         } catch (error) {
                             console.error(`Midjourney: 图片[${index}]处理失败，使用原图`, error);
@@ -4760,7 +4743,6 @@ function TapnowApp() {
                             const blob = await getBlobFromUrl(imageUrl);
                             const dataUrl = await blobToDataURL(blob);
                             const processed = await prepareImageForMidjourneyUpload(dataUrl, 2048, 8);
-                            console.log(`Midjourney: 图片[${index}]从URL处理完成`);
                             return processed;
                         } catch (error) {
                             console.error(`Midjourney: 图片[${index}]从URL处理失败`, error);
@@ -4793,7 +4775,6 @@ function TapnowApp() {
                 cleaned = cleaned.replace(/[^A-Za-z0-9+/=]/g, '');
                 const afterClean = cleaned.length;
                 if (beforeClean !== afterClean) {
-                    console.log(`Midjourney: base64[${index}]清理了 ${beforeClean - afterClean} 个非法字符`);
                 }
 
                 if (!cleaned || cleaned.length < 100) {
@@ -4829,7 +4810,6 @@ function TapnowApp() {
                     if (!testDecode || testDecode.length === 0) {
                         throw new Error('base64解码结果为空');
                     }
-                    console.log(`Midjourney: base64[${index}]解码测试通过，解码后长度: ${testDecode.length}`);
                 } catch (decodeError) {
                     console.error(`Midjourney: base64[${index}]解码测试失败:`, decodeError);
                     throw new Error(`invalid_base64_format: base64[${index}]无法解码`);
@@ -4838,14 +4818,12 @@ function TapnowApp() {
                 // 根据API文档，base64Array需要完整的data URL格式：data:image/png;base64,xxx
                 // 而不是纯base64字符串
                 const dataUrl = `data:image/jpeg;base64,${cleaned}`;
-                console.log(`Midjourney: base64[${index}]清理完成，长度: ${cleaned.length}, 前20字符: ${cleaned.substring(0, 20)}`);
                 return dataUrl;
             });
 
             // 使用Midjourney的上传接口：/mj/submit/upload-discord-images
             const uploadEndpoint = `${baseUrl}/mj/submit/upload-discord-images`;
 
-            console.log('Midjourney: 上传图片，base64数组长度:', cleanedBase64Array.length, '第一个data URL长度:', cleanedBase64Array[0]?.length, '前50字符:', cleanedBase64Array[0]?.substring(0, 50));
 
             // 最终验证所有data URL字符串（现在返回的是完整的data URL格式）
             cleanedBase64Array.forEach((dataUrl, idx) => {
@@ -4892,7 +4870,6 @@ function TapnowApp() {
 
             // 验证JSON序列化后的数据
             const jsonString = JSON.stringify(requestBody);
-            console.log('Midjourney: 请求体JSON长度:', jsonString.length, 'base64数组长度:', cleanedBase64Array.length);
 
             const uploadResp = await fetch(uploadEndpoint, {
                 method: 'POST',
@@ -4920,11 +4897,9 @@ function TapnowApp() {
             }
 
             const uploadData = await uploadResp.json();
-            console.log('Midjourney: 上传响应:', uploadData);
 
             // 检查响应格式
             if (uploadData.code === 1 && uploadData.result && Array.isArray(uploadData.result)) {
-                console.log('Midjourney: 图片上传成功，获取URLs:', uploadData.result);
                 return uploadData.result; // 返回URL数组
             } else {
                 const errorMsg = uploadData.description || uploadData.message || '上传失败：响应格式错误';
@@ -4997,7 +4972,6 @@ function TapnowApp() {
                     return null;
                 }
 
-                console.log('拓展图片: 提取的base64数据长度:', base64Data.length, '前50字符:', base64Data.substring(0, 50), '后10字符:', base64Data.substring(base64Data.length - 10), '格式验证通过:', base64Regex.test(base64Data));
 
                 // 优先使用 Midjourney 官方上传接口
                 try {
@@ -5008,7 +4982,6 @@ function TapnowApp() {
                         base64Array: [base64Data]
                     };
 
-                    console.log('拓展图片: 使用 Midjourney 上传接口上传图片...', uploadEndpoint, 'base64长度:', base64Data.length);
 
                     const uploadResp = await fetch(uploadEndpoint, {
                         method: 'POST',
@@ -5020,7 +4993,6 @@ function TapnowApp() {
                     });
 
                     const responseText = await uploadResp.text();
-                    console.log('拓展图片: Midjourney 上传响应状态:', uploadResp.status, '响应长度:', responseText.length);
 
                     if (uploadResp.ok) {
                         let uploadData;
@@ -5031,7 +5003,6 @@ function TapnowApp() {
                             throw new Error('响应不是有效的JSON格式');
                         }
 
-                        console.log('拓展图片: Midjourney 上传响应数据:', uploadData);
                         console.log('拓展图片: 响应详细信息:', {
                             code: uploadData.code,
                             description: uploadData.description,
@@ -5065,7 +5036,6 @@ function TapnowApp() {
                             }
 
                             if (httpUrl && (httpUrl.startsWith('http://') || httpUrl.startsWith('https://'))) {
-                                console.log('拓展图片: Midjourney 上传成功，获取HTTP URL:', httpUrl);
                                 return httpUrl;
                             } else {
                                 console.warn('拓展图片: Midjourney 返回的URL格式不正确或为空', {
@@ -5130,7 +5100,6 @@ function TapnowApp() {
                             const data = await resp.json();
                             const httpUrl = service.parseResponse(data);
                             if (httpUrl && (httpUrl.startsWith('http://') || httpUrl.startsWith('https://'))) {
-                                console.log(`拓展图片: 使用${service.name}图床上传成功，获取HTTP URL:`, httpUrl);
                                 return httpUrl;
                             }
                         }
@@ -5165,7 +5134,6 @@ function TapnowApp() {
 
                 // 如果图片尺寸已经小于等于目标尺寸，直接返回原图
                 if (originalWidth <= maxWidth && originalHeight <= maxHeight) {
-                    console.log(`Veo: 图片尺寸 ${originalWidth}x${originalHeight} 无需缩放`);
                     if (imageUrl.startsWith('data:')) {
                         resolve(imageUrl);
                     } else {
@@ -5191,7 +5159,6 @@ function TapnowApp() {
                     newHeight = newHeight % 2 === 0 ? newHeight : newHeight - 1;
                 }
 
-                console.log(`Veo: 缩放图片 ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight}`);
 
                 // 使用canvas缩放图片
                 const canvas = document.createElement('canvas');
@@ -5328,7 +5295,6 @@ function TapnowApp() {
                 };
 
                 // 可选：给用户反馈
-                console.log(`已复制 ${selectedNodes.length} 个节点`);
             }
         };
 
@@ -5460,7 +5426,6 @@ function TapnowApp() {
                     setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
                 }
 
-                console.log(`已粘贴 ${newNodes.length} 个节点`);
             }
         };
 
@@ -5554,7 +5519,6 @@ function TapnowApp() {
                         setSelectedNodeIds(new Set(newNodes.map(n => n.id)));
                     }
 
-                    console.log(`已粘贴 ${newNodes.length} 个节点`);
                 }
             }
         };
@@ -5580,7 +5544,6 @@ function TapnowApp() {
             // 检查是否是分镜表的任务，如果是则更新状态为 draft
             const storyboardTask = storyboardTaskMapRef.current.get(taskId);
             if (storyboardTask) {
-                console.log('[分镜表] Veo轮询超时，更新状态:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId });
                 updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                     status: 'draft'
                 });
@@ -5599,7 +5562,6 @@ function TapnowApp() {
                 let data;
                 try { data = JSON.parse(text); } catch (err) { setTimeout(() => pollVeoJob(jobId, taskId, baseUrl, apiKey, w, h, attempt + 1), delayMs); return; }
 
-                console.log('[Tapnow] Veo Poll:', data);
                 const status = data?.data?.status || data?.status || data?.data?.task_status;
                 const progress = data?.data?.progress || data?.progress || '0%';
                 const failReason = data?.data?.fail_reason || data?.fail_reason || '';
@@ -5612,7 +5574,6 @@ function TapnowApp() {
                         setHistory((prev) => prev.map((hItem) => hItem.id === taskId ? { ...hItem, status: 'failed', errorMsg: '未找到视频URL' } : hItem));
                         return;
                     }
-                    console.log('[Tapnow] Veo: 任务成功，视频URL:', videoUrl);
                     const endTime = Date.now();
                     // 在更新 history 之前，先获取 sourceNodeId 和 ratio
                     // 使用函数式更新来确保获取最新的 historyItem
@@ -5622,7 +5583,6 @@ function TapnowApp() {
                         const originalRatio = historyItem?.ratio;
                         const durationMs = endTime - (historyItem?.startTime || endTime);
 
-                        console.log('[Tapnow] Veo: 从历史记录获取信息', { taskId, originalRatio, sourceNodeId, historyItem });
 
                         // 对于 veo3.1，尝试从实际视频获取真实尺寸
                         let finalW = w, finalH = h;
@@ -5632,7 +5592,6 @@ function TapnowApp() {
                             try {
                                 const videoMeta = await getVideoMetadata(videoUrl);
                                 if (videoMeta && videoMeta.w > 0 && videoMeta.h > 0) {
-                                    console.log('[Tapnow] Veo: 获取到视频实际尺寸', { w: videoMeta.w, h: videoMeta.h, requestedRatio: originalRatio });
                                     const actualW = videoMeta.w;
                                     const actualH = videoMeta.h;
 
@@ -5648,7 +5607,6 @@ function TapnowApp() {
                                             finalW = w;
                                             finalH = Math.round(w / (16 / 9));
                                         } else {
-                                            console.log(`[Tapnow] Veo: 视频实际比例匹配 16:9`);
                                             finalW = actualW;
                                             finalH = actualH;
                                         }
@@ -5663,7 +5621,6 @@ function TapnowApp() {
                                             finalW = Math.round(h * (9 / 16));
                                             finalH = h;
                                         } else {
-                                            console.log(`[Tapnow] Veo: 视频实际比例匹配 9:16`);
                                             finalW = actualW;
                                             finalH = actualH;
                                         }
@@ -5685,7 +5642,6 @@ function TapnowApp() {
                                     // 检查是否是分镜表的任务，如果是则回填到分镜表
                                     const storyboardTask = storyboardTaskMapRef.current.get(taskId);
                                     if (storyboardTask) {
-                                        console.log('[分镜表] Veo任务完成，回填视频:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, videoUrl });
                                         updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                                             video_url: videoUrl,
                                             status: 'done'
@@ -5696,7 +5652,6 @@ function TapnowApp() {
                                         // 更新预览窗口（非分镜表任务）
                                         if (sourceNodeId) {
                                             setTimeout(() => {
-                                                console.log('[Tapnow] Veo: 准备更新预览窗口', { taskId, videoUrl, sourceNodeId });
                                                 updatePreviewFromTask(taskId, videoUrl, 'video', sourceNodeId);
                                             }, 0);
                                         }
@@ -5730,7 +5685,6 @@ function TapnowApp() {
                                 // 检查是否是分镜表的任务，如果是则回填到分镜表
                                 const storyboardTask = storyboardTaskMapRef.current.get(taskId);
                                 if (storyboardTask) {
-                                    console.log('[分镜表] Veo任务完成（fallback），回填视频:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, videoUrl });
                                     updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                                         video_url: videoUrl,
                                         status: 'done'
@@ -5741,7 +5695,6 @@ function TapnowApp() {
                                     // 更新预览窗口（非分镜表任务）
                                     if (sourceNodeId) {
                                         setTimeout(() => {
-                                            console.log('[Tapnow] Veo: 准备更新预览窗口', { taskId, videoUrl, sourceNodeId });
                                             updatePreviewFromTask(taskId, videoUrl, 'video', sourceNodeId);
                                         }, 0);
                                     }
@@ -5773,7 +5726,6 @@ function TapnowApp() {
 
                 // 处理 NOT_START 状态：可能是任务还在队列中，继续等待
                 if (status === 'NOT_START' || status === 'PENDING' || status === 'QUEUED') {
-                    console.log(`[Tapnow] Veo: 任务状态 ${status}，进度 ${progress}，继续等待...`);
                     // 对于 NOT_START 状态，进度更新更慢一些，避免频繁更新
                     const currentProgress = parseInt(progress) || 0;
                     setHistory((prev) => prev.map((hItem) => hItem.id === taskId ? {
@@ -5788,7 +5740,6 @@ function TapnowApp() {
 
                 // 其他状态（如 PROCESSING、GENERATING 等）：继续轮询
                 const currentProgress = parseInt(progress) || Math.min(95, (attempt * 2) + 10);
-                console.log(`[Tapnow] Veo: 任务状态 ${status}，进度 ${progress}，继续轮询...`);
                 setHistory((prev) => prev.map((hItem) => hItem.id === taskId ? { ...hItem, status: 'generating', progress: currentProgress } : hItem));
                 setTimeout(() => pollVeoJob(jobId, taskId, baseUrl, apiKey, w, h, attempt + 1), delayMs);
             })
@@ -5818,7 +5769,6 @@ function TapnowApp() {
             // 检查是否是分镜表的任务，如果是则更新状态为 draft
             const storyboardTask = storyboardTaskMapRef.current.get(taskId);
             if (storyboardTask) {
-                console.log('[分镜表] Sora轮询超时，更新状态:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId });
                 updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                     status: 'draft'
                 });
@@ -5852,7 +5802,6 @@ function TapnowApp() {
                     return;
                 }
 
-                console.log('[Tapnow] Sora/Grok Poll:', data);
                 const status = data?.data?.status || data?.status || data?.data?.task_status || data?.task_status;
 
                 if (status === 'SUCCESS' || status === 'succeeded' || status === 'FINISHED' || status === 'completed') {
@@ -5872,7 +5821,6 @@ function TapnowApp() {
                         // 检查是否是分镜表的任务，如果是则回填到分镜表
                         const storyboardTask = storyboardTaskMapRef.current.get(taskId);
                         if (storyboardTask) {
-                            console.log('[分镜表] Sora任务完成，回填视频:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, videoUrl });
                             updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                                 video_url: videoUrl,
                                 status: 'done'
@@ -5884,7 +5832,6 @@ function TapnowApp() {
                             const updatedItem = updated.find(h => h.id === taskId);
                             if (updatedItem?.sourceNodeId) {
                                 setTimeout(() => {
-                                    console.log('[Tapnow] Sora: 准备更新预览窗口', { taskId, videoUrl, sourceNodeId: updatedItem.sourceNodeId });
                                     updatePreviewFromTask(taskId, videoUrl, 'video', updatedItem.sourceNodeId);
                                 }, 0);
                             } else {
@@ -6010,7 +5957,6 @@ function TapnowApp() {
                         }
                     }
 
-                    console.log(`Midjourney: 切割图片完成，原图尺寸 ${img.width}x${img.height}，每张图尺寸 ${singleWidth}x${singleHeight}，比例 ${actualRatio.toFixed(2)}`);
                     resolve(images);
                 } catch (error) {
                     console.error('Midjourney: 切割图片时出错:', error);
@@ -6065,7 +6011,6 @@ function TapnowApp() {
                     return;
                 }
 
-                console.log('[Async Image] Poll:', data);
 
                 // 根据API规范，响应格式可能有多种：
                 // 1. { code, message, data: { status, images: [...] } }
@@ -6086,22 +6031,18 @@ function TapnowApp() {
                 // 方式1：data.data.data（嵌套格式，最常见）
                 if (data?.data?.data && Array.isArray(data.data.data) && data.data.data.length > 0) {
                     images = data.data.data;
-                    console.log('[Async Image] 从 data.data.data 提取到图片:', images.length, '张');
                 }
                 // 方式2：data.data.images
                 else if (data?.data?.images && Array.isArray(data.data.images) && data.data.images.length > 0) {
                     images = data.data.images;
-                    console.log('[Async Image] 从 data.data.images 提取到图片:', images.length, '张');
                 }
                 // 方式3：data.images
                 else if (data?.images && Array.isArray(data.images) && data.images.length > 0) {
                     images = data.images;
-                    console.log('[Async Image] 从 data.images 提取到图片:', images.length, '张');
                 }
                 // 方式4：data.data（标准OpenAI格式）
                 else if (data?.data && Array.isArray(data.data) && data.data.length > 0) {
                     images = data.data;
-                    console.log('[Async Image] 从 data.data 提取到图片:', images.length, '张');
                 }
 
                 // 如果还是没有找到图片，尝试从revised_prompt中提取URL（备用方案）
@@ -6113,7 +6054,6 @@ function TapnowApp() {
                             const urlMatch = firstItem.revised_prompt.match(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/);
                             if (urlMatch && urlMatch[1]) {
                                 images = [{ url: urlMatch[1] }];
-                                console.log('[Async Image] 从 revised_prompt 中提取到图片URL:', urlMatch[1]);
                             }
                         }
                     }
@@ -6122,7 +6062,6 @@ function TapnowApp() {
                         const urlMatch = data.data.revised_prompt.match(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/);
                         if (urlMatch && urlMatch[1]) {
                             images = [{ url: urlMatch[1] }];
-                            console.log('[Async Image] 从 data.data.revised_prompt 中提取到图片URL:', urlMatch[1]);
                         }
                     }
                     // 最后尝试：如果data.data.data存在但images为空，可能是数据结构问题，直接使用data.data.data
@@ -6131,13 +6070,11 @@ function TapnowApp() {
                         const itemsWithUrl = data.data.data.filter(item => item?.url || item?.image_url || item?.imageUrl);
                         if (itemsWithUrl.length > 0) {
                             images = itemsWithUrl;
-                            console.log('[Async Image] 从 data.data.data 中重新提取到图片（二次尝试）:', images.length, '张');
                         }
                     }
 
                     // 如果任务状态是SUCCESS但还没找到图片，立即执行深度搜索（不等待后续处理）
                     if (images.length === 0 && (status === 'COMPLETED' || status === 'SUCCESS' || status === 'FINISHED' || status === 'DONE')) {
-                        console.log('[Async Image] 任务状态为成功但图片数量为0，立即执行深度搜索');
                         // 优化后的深度搜索函数：优先检查常见路径，减少递归深度
                         const deepSearchForUrl = (obj, depth = 0, visited = new WeakSet()) => {
                             if (depth > 5) return null; // 防止无限递归
@@ -6175,7 +6112,6 @@ function TapnowApp() {
                         const foundUrl = deepSearchForUrl(data);
                         if (foundUrl) {
                             images = [{ url: foundUrl }];
-                            console.log('[Async Image] 通过立即深度搜索找到图片URL:', foundUrl);
                         } else {
                             console.warn('[Async Image] 深度搜索未找到图片URL，响应数据结构:', JSON.stringify(data, null, 2).substring(0, 500));
                         }
@@ -6190,7 +6126,6 @@ function TapnowApp() {
                         if (hItem.id === taskId) {
                             // 支持多种成功状态值
                             if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'FINISHED' || status === 'DONE') {
-                                console.log('[Async Image] 任务状态为成功:', status, '图片数量:', images.length);
 
                                 // 保存sourceNodeId，用于后续更新预览窗口
                                 const savedSourceNodeId = hItem.sourceNodeId || sourceNodeId;
@@ -6203,41 +6138,30 @@ function TapnowApp() {
                                         return img?.url || img?.image_url || img?.imageUrl || '';
                                     }).filter(Boolean);
 
-                                    console.log('[Async Image] 提取到的图片URLs:', imageUrls);
 
                                     if (imageUrls.length > 0) {
                                         const primaryUrl = imageUrls[0];
 
                                         // V3.6.1: 检查是否是分镜表的图片任务
-                                        // V3.7.30: 添加调试日志
-                                        console.log('[V3.7.30 Async Debug] 检查分镜表任务映射:', {
-                                            taskId,
-                                            mapSize: storyboardTaskMapRef.current.size,
-                                            hasTask: storyboardTaskMapRef.current.has(taskId),
-                                            allTaskIds: Array.from(storyboardTaskMapRef.current.keys())
-                                        });
+                                        if (storyboardTaskMapRef.current.has(taskId)) {
+                                            const storyboardTask = storyboardTaskMapRef.current.get(taskId);
 
-                                        const storyboardTask = storyboardTaskMapRef.current.get(taskId);
-                                        console.log('[V3.7.30 Async Debug] 分镜表任务详情:', {
-                                            storyboardTask,
-                                            isImageMode: storyboardTask?.isImageMode
-                                        });
 
-                                        if (storyboardTask && storyboardTask.isImageMode) {
-                                            // V3.7.29: 传递所有图片，与同步生成保持一致
-                                            console.log('[分镜表] 图片生成完成，回填图片:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, imageCount: imageUrls.length });
-                                            updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
-                                                output_images: imageUrls, // V3.7.29: 所有图片
-                                                output_url: primaryUrl,   // 兼容旧逻辑
-                                                selectedImageIndex: 0,    // 默认选中第一张
-                                                outputEnabled: false,     // 用户手动选择满意的
-                                                status: 'done'
-                                            });
-                                            // 清理任务映射
-                                            storyboardTaskMapRef.current.delete(taskId);
-                                        } else {
-                                            console.warn('[V3.7.30 Async Debug] 分镜表任务未找到或不是图片模式，无法回填');
-                                        }
+                                            if (storyboardTask && storyboardTask.isImageMode) {
+                                                // V3.7.29: 传递所有图片，与同步生成保持一致
+                                                updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
+                                                    output_images: imageUrls, // V3.7.29: 所有图片
+                                                    output_url: primaryUrl,   // 兼容旧逻辑
+                                                    selectedImageIndex: 0,    // 默认选中第一张
+                                                    outputEnabled: false,     // 用户手动选择满意的
+                                                    status: 'done'
+                                                });
+                                                // 清理任务映射
+                                                storyboardTaskMapRef.current.delete(taskId);
+                                            } else {
+                                                console.warn('[V3.7.30 Async Debug] 分镜表任务未找到或不是图片模式，无法回填');
+                                            }
+                                        } // Close if (storyboardTaskMapRef.current.has(taskId))
 
                                         // 优先使用后端返回的实际花费时间（如果存在）
                                         // 后端可能返回的字段：duration, cost_time, elapsed_time, time_cost, spent_time 等（单位可能是秒或毫秒）
@@ -6350,7 +6274,6 @@ function TapnowApp() {
 
                                     const foundUrl = deepSearchForUrl(data);
                                     if (foundUrl) {
-                                        console.log('[Async Image] 通过深度搜索找到图片URL:', foundUrl);
 
                                         // 优先使用后端返回的实际花费时间（如果存在）
                                         let durationMs = null;
@@ -6551,7 +6474,6 @@ function TapnowApp() {
                     return;
                 }
 
-                console.log('[Tapnow] Midjourney Poll:', data);
 
                 const status = data?.status || '';
                 const progress = data?.progress || '0%';
@@ -6604,7 +6526,6 @@ function TapnowApp() {
                                 const sourceNodeIdForPreview = hItem.sourceNodeId;
                                 if (sourceNodeIdForPreview) {
                                     setTimeout(() => {
-                                        console.log('[Tapnow] Midjourney: 准备更新预览窗口', { taskId, imageUrl, sourceNodeId: sourceNodeIdForPreview });
                                         updatePreviewFromTask(taskId, imageUrl, 'image', sourceNodeIdForPreview);
                                     }, 0);
                                 } else {
@@ -6677,7 +6598,6 @@ function TapnowApp() {
                             newProgress = Math.min(95, (hItem.progress || 5) + 2);
                         }
 
-                        console.log(`[Tapnow] Midjourney Poll Status Update: Task ${taskId}, Status: ${newStatus}, Progress: ${newProgress}%, ImageUrl: ${imageUrl ? 'Yes' : 'No'}`);
 
                         const updatedItem = {
                             ...hItem,
@@ -6696,7 +6616,6 @@ function TapnowApp() {
                         if ((status === 'SUCCESS' || status === 'FINISHED') && imageUrl && (!hItem.apiConfig?.modelId?.includes('mj') || hItem.apiConfig?.modelId === 'mj-zoom')) {
                             // 直接传入 sourceNodeId，避免依赖可能未更新的 history 状态
                             if (hItem.sourceNodeId) {
-                                console.log('[Tapnow] 图片生成: 准备更新节点', { taskId, imageUrl, sourceNodeId: hItem.sourceNodeId, modelId: hItem.apiConfig?.modelId });
                                 // 如果是拓展图片任务，更新拓展图片节点；否则更新预览窗口
                                 if (hItem.apiConfig?.modelId === 'mj-zoom') {
                                     setNodes((prev) => prev.map((n) =>
@@ -6802,7 +6721,6 @@ function TapnowApp() {
             try {
                 resolvedSourceImages = await Promise.all(rawSourceImages.map(async (img) => {
                     if (LocalImageManager.isImageId(img)) {
-                        console.log(`[startGeneration] Resolving IDB image: ${img}`);
                         const blobUrl = await LocalImageManager.getImage(img);
                         if (blobUrl) return blobUrl;
                         console.warn(`[startGeneration] Failed to resolve IDB image: ${img}`);
@@ -6819,7 +6737,6 @@ function TapnowApp() {
         const connectedImages = resolvedSourceImages;
         const sourceImage = connectedImages.length > 0 ? connectedImages[0] : undefined;
 
-        console.log('[startGeneration] Images prepared:', connectedImages);
 
         if (!prompt && !sourceImage) { alert('请输入提示词或连接参考图片'); return; }
 
@@ -6847,18 +6764,15 @@ function TapnowApp() {
                 const sourceNode = nodesMap.get(incomingConn.from);
                 if (sourceNode && sourceNode.maskContent) {
                     finalMaskContent = sourceNode.maskContent;
-                    console.log('[Inpainting] 从上游节点获取蒙版:', sourceNode.id);
                 }
             }
         } else {
-            console.log('[Inpainting] 使用当前节点的蒙版:', nodeId);
         }
 
         // 如果存在蒙版，处理蒙版（反转逻辑）
         if (finalMaskContent) {
             finalMaskBlob = await processMaskForInpainting(finalMaskContent);
             if (finalMaskBlob) {
-                console.log('[Inpainting] 蒙版已处理（已反转）');
             } else {
                 console.warn('[Inpainting] 蒙版处理失败，将使用原始蒙版');
             }
@@ -6892,22 +6806,22 @@ function TapnowApp() {
             const currentBlacklist = apiBlacklistRef.current || {};
 
             // V3.5.1 Debug: 详细日志输出
-            console.log('[V3.5.1 Debug] Multi-account rotation check:');
-            console.log('  - Total keys:', allKeys.length);
-            console.log('  - Blacklist:', JSON.stringify(currentBlacklist));
 
             const availableKeys = allKeys.filter(k => !currentBlacklist[k]);
-            console.log('  - Available keys:', availableKeys.length);
 
             if (availableKeys.length > 0) {
                 // 从可用 key 中随机选择
                 apiKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-                console.log(`[Load Balancing] Selected API Key from ${availableKeys.length}/${allKeys.length} available options`);
             } else if (allKeys.length > 0) {
                 // 所有 key 都在黑名单，降级到随机选择（避免完全失败）
                 apiKey = allKeys[Math.floor(Math.random() * allKeys.length)];
                 console.warn(`⚠️ [Load Balancing] All ${allKeys.length} keys are blacklisted, using random selection`);
             }
+        }
+
+        // [Debug] Log selected API key (masked)
+        if (apiKey) {
+            console.log(`[API Select] Using Key ending in ...${apiKey.slice(-4)}`);
         }
         let baseUrlRaw = credentials.url;
 
@@ -6918,7 +6832,6 @@ function TapnowApp() {
             if (urls.length > 0) {
                 // 随机选择一个
                 baseUrl = urls[Math.floor(Math.random() * urls.length)];
-                console.log(`[Load Balancing] Selected API URL from ${urls.length} options: ${baseUrl}`);
             }
         }
 
@@ -6934,7 +6847,6 @@ function TapnowApp() {
             prompt = prompt.replace(/@\{([^\}]+)\}/g, (match, username) => {
                 return ` @{${username}} `;
             }).replace(/\s{2,}/g, ' ').trim(); // 清理多余空格
-            console.log('[Sora 2] Normalized prompt:', prompt);
         }
 
         // 优先使用 options 中的 ratio，其次使用节点设置，最后使用默认值
@@ -6954,7 +6866,6 @@ function TapnowApp() {
                 w = safeW;
                 h = safeH;
                 sizeStr = `${safeW}x${safeH}`;
-                console.log(`[Auto Res] Using Source Dimensions: ${sizeStr}`);
             } catch (e) { console.error("Auto Res Error", e); }
         } else {
             if (!w || !h) {
@@ -6988,7 +6899,6 @@ function TapnowApp() {
                 w = newW;
                 h = newH;
                 sizeStr = `${newW}x${newH}`;
-                console.log(`[Auto+${resolution}] Upscale from ${dims.w}x${dims.h} -> ${sizeStr}`);
             } catch (e) {
                 console.error('Auto+K Upscale Error', e);
             }
@@ -6996,7 +6906,6 @@ function TapnowApp() {
 
         // 优先使用 options 中的 duration，其次使用节点设置，最后使用默认值
         let duration = options.duration ? String(options.duration).replace('s', '') : (node?.settings?.duration?.replace('s', '') || '5');
-        console.log('[V3.5.2 Debug] Duration processing: options.duration=', options.duration, 'final duration=', duration);
         if (modelId.includes('veo')) duration = '8';
 
         // V3.5.0: 覆盖分辨率设置 (Jimeng/Grok)
@@ -7057,7 +6966,6 @@ function TapnowApp() {
                     shotId: shotId,
                     isImageMode: isImageMode  // V3.6.1: 记录任务类型
                 });
-                console.log('[分镜表] 任务已记录:', { taskId, nodeId: storyboardNodeId, shotId, isImageMode });
             }
         }
 
@@ -7343,7 +7251,6 @@ function TapnowApp() {
                                     }
                                 }
                                 jimengRatio = closestRatio.name;
-                                console.log(`[Jimeng] Auto ratio: ${sourceDims.w}x${sourceDims.h} -> ${actualRatio.toFixed(2)} -> ${jimengRatio}`);
 
                                 if (resolution === 'Auto') {
                                     const maxSide = Math.max(sourceDims.w, sourceDims.h);
@@ -7362,14 +7269,12 @@ function TapnowApp() {
                             // 处理 Blob URL - 尝试恢复数据
                             if (imgUrl.startsWith('blob:')) {
                                 try {
-                                    console.log('⚠️ 检测到 Blob URL，尝试恢复数据...');
                                     const response = await fetch(imgUrl);
                                     if (response.ok) {
                                         const blob = await response.blob();
                                         return await new Promise((resolve) => {
                                             const reader = new FileReader();
                                             reader.onloadend = () => {
-                                                console.log('✅ Blob URL 恢复成功');
                                                 resolve(reader.result);
                                             };
                                             reader.readAsDataURL(blob);
@@ -7468,7 +7373,6 @@ function TapnowApp() {
 
                     const requestBody = useMultipart ? payload : JSON.stringify(payload);
 
-                    console.log(`[API Request] Attempting with Key: ...${currentApiKey.slice(-4)} | URL: ${fullUrl} `);
 
                     return await fetch(fullUrl, {
                         method: 'POST',
@@ -7506,12 +7410,10 @@ function TapnowApp() {
                 const combinations = [];
                 for (const k of apiKeysList) {
                     if (currentBlacklist[k]) {
-                        console.log(`⛔ [Blacklist] Skipping Key "...${k.slice(-4)}" - Reason: ${currentBlacklist[k].reason}`);
                         continue;
                     }
                     // V3.7.23: 跳过暂停列表中的 key
                     if (isKeySuspended(k)) {
-                        console.log(`⏳ [Suspend] Skipping Key \"...${k.slice(-4)}\" - 暂时暂停中`);
                         continue;
                     }
                     for (const u of baseUrlsList) {
@@ -7555,7 +7457,6 @@ function TapnowApp() {
 
                         // Debug: 检查响应数据
                         if (isJimeng && data) {
-                            console.log(`[DEBUG] Jimeng Response: code=${data.code} (type: ${typeof data.code}), message=${data.message}`);
                         }
 
                         // 从代理包装的响应中提取真实错误码（代理返回 code=-2001，真实错误在 message 中）
@@ -7564,13 +7465,11 @@ function TapnowApp() {
                             const match = data.message.match(/错误码:\s*(\d+)/);
                             if (match) {
                                 realErrorCode = parseInt(match[1], 10);
-                                console.log(`[DEBUG] Extracted real error code from message: ${realErrorCode}`);
                             }
                         }
 
                         // V3.7.23: 详细错误日志
                         if (isJimeng && data && (data.code !== 0 || realErrorCode)) {
-                            console.log(`[API Error Log] rawMessage: ${data.message}, realErrorCode: ${realErrorCode}, originalCode: ${data.code}`);
                         }
 
                         // V3.7.23: 参数错误 (1000) - 致命错误，不应重试
@@ -7680,63 +7579,54 @@ function TapnowApp() {
                 // V3.6.1: 检查是否是分镜表的图片任务
                 // V3.7.9: 保存所有生成的图片到 output_images 数组
                 // V3.7.30: 添加调试日志
-                console.log('[V3.7.30 Debug] 检查分镜表任务映射:', {
-                    taskId,
-                    mapSize: storyboardTaskMapRef.current.size,
-                    hasTask: storyboardTaskMapRef.current.has(taskId),
-                    allTaskIds: Array.from(storyboardTaskMapRef.current.keys())
-                });
+                if (storyboardTaskMapRef.current.has(taskId)) {
+                    const storyboardTask = storyboardTaskMapRef.current.get(taskId);
 
-                const storyboardTask = storyboardTaskMapRef.current.get(taskId);
-                console.log('[V3.7.30 Debug] 分镜表任务详情:', {
-                    storyboardTask,
-                    isImageMode: storyboardTask?.isImageMode
-                });
 
-                if (storyboardTask && storyboardTask.isImageMode) {
-                    console.log('[分镜表] 图片生成完成，回填图片:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, imageCount: imageUrls.length });
-                    updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
-                        output_images: imageUrls, // V3.7.9: 保存所有图片
-                        output_url: imageUrls[0], // 兼容旧逻辑
-                        selectedImageIndex: 0, // V3.7.9: 默认选中第一张
-                        outputEnabled: false, // V3.7.25: 默认不勾选，用户手动选择满意的
-                        status: 'done'
-                    });
-                    // 清理任务映射
-                    storyboardTaskMapRef.current.delete(taskId);
-                } else {
-                    console.warn('[V3.7.30 Debug] 分镜表任务未找到或不是图片模式，无法回填');
-                }
+                    if (storyboardTask && storyboardTask.isImageMode) {
+                        updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
+                            output_images: imageUrls, // V3.7.9: 保存所有图片
+                            output_url: imageUrls[0], // 兼容旧逻辑
+                            selectedImageIndex: 0, // V3.7.9: 默认选中第一张
+                            outputEnabled: false, // V3.7.25: 默认不勾选，用户手动选择满意的
+                            status: 'done'
+                        });
+                        // 清理任务映射
+                        storyboardTaskMapRef.current.delete(taskId);
+                    } else {
+                        console.warn('[V3.7.30 Debug] 分镜表任务未找到或不是图片模式，无法回填');
+                    }
 
-                setHistory((prev) => {
-                    const updated = prev.map((hItem) => {
-                        if (hItem.id === taskId) {
-                            const updatedItem = {
-                                ...hItem,
-                                status: 'completed',
-                                progress: 100,
-                                url: primaryUrl,
-                                width: w,
-                                height: h,
-                                durationMs,
-                                mjImages: imageUrls.length > 1 ? imageUrls : null,
-                                selectedMjImageIndex: 0
-                            };
+                    setHistory((prev) => {
+                        const updated = prev.map((hItem) => {
+                            if (hItem.id === taskId) {
+                                const updatedItem = {
+                                    ...hItem,
+                                    status: 'completed',
+                                    progress: 100,
+                                    url: primaryUrl,
+                                    width: w,
+                                    height: h,
+                                    durationMs,
+                                    mjImages: imageUrls.length > 1 ? imageUrls : null,
+                                    selectedMjImageIndex: 0
+                                };
 
-                            // 更新预览窗口（非分镜表任务）
-                            if (updatedItem.sourceNodeId && !storyboardTask) {
-                                setTimeout(() => {
-                                    updatePreviewFromTask(taskId, primaryUrl, 'image', updatedItem.sourceNodeId, updatedItem.mjImages);
-                                }, 0);
+                                // 更新预览窗口（非分镜表任务）
+                                if (updatedItem.sourceNodeId && !storyboardTask) {
+                                    setTimeout(() => {
+                                        updatePreviewFromTask(taskId, primaryUrl, 'image', updatedItem.sourceNodeId, updatedItem.mjImages);
+                                    }, 0);
+                                }
+                                return updatedItem;
                             }
-                            return updatedItem;
-                        }
-                        return hItem;
+                            return hItem;
+                        });
+                        return updated;
                     });
-                    return updated;
-                });
-                return;
-            }
+                    return;
+                }
+            } // Close if (type === 'image')
 
             if (type === 'video') {
                 // V3.4.20: Explicitly define config for video generation block
@@ -7757,12 +7647,10 @@ function TapnowApp() {
 
                                 // 如果是 http/https URL，先检查尺寸，如果太大就缩放
                                 if (trimmedImg.startsWith('http://') || trimmedImg.startsWith('https://')) {
-                                    console.log('Veo: Processing HTTP URL for image');
                                     // 对于URL，先尝试获取尺寸，如果太大就缩放
                                     try {
                                         const dims = await getImageDimensions(trimmedImg);
                                         if (dims.w > 1920 || dims.h > 1920) {
-                                            console.log(`Veo: 图片尺寸 ${dims.w}x${dims.h} 过大，需要缩放`);
                                             const resized = await resizeImageForVeo(trimmedImg, 1920, 1920);
                                             return resized;
                                         }
@@ -7775,12 +7663,10 @@ function TapnowApp() {
                                 }
 
                                 // 对于 data URL、blob URL 或其他格式，统一缩放处理
-                                console.log('Veo: Processing image (data/blob/other format)');
                                 try {
                                     // 先获取尺寸
                                     const dims = await getImageDimensions(trimmedImg);
                                     if (dims.w > 1920 || dims.h > 1920) {
-                                        console.log(`Veo: 图片尺寸 ${dims.w}x${dims.h} 过大，需要缩放`);
                                         const resized = await resizeImageForVeo(trimmedImg, 1920, 1920);
                                         return resized;
                                     }
@@ -7808,23 +7694,18 @@ function TapnowApp() {
                         try {
                             // 先获取图片尺寸
                             const dims = await getImageDimensions(trimmedSource);
-                            console.log(`Veo: 源图片尺寸 ${dims.w}x${dims.h} `);
 
                             // 如果图片过大，先缩放
                             if (dims.w > 1920 || dims.h > 1920) {
-                                console.log(`Veo: 图片尺寸 ${dims.w}x${dims.h} 过大，缩放中...`);
                                 const resized = await resizeImageForVeo(trimmedSource, 1920, 1920);
                                 images = [resized];
                             } else {
                                 // 尺寸合适，根据格式处理
                                 if (trimmedSource.startsWith('http://') || trimmedSource.startsWith('https://')) {
-                                    console.log('Veo: Using HTTP URL for source image (尺寸合适)');
                                     images = [trimmedSource];
                                 } else if (trimmedSource.startsWith('data:')) {
-                                    console.log('Veo: Using data URL for source image (尺寸合适)');
                                     images = [trimmedSource];
                                 } else if (trimmedSource.startsWith('blob:')) {
-                                    console.log('Veo: Converting blob URL to base64 for source image');
                                     const base64 = await getBase64FromUrl(trimmedSource);
                                     images = [`data: image / png; base64, ${base64} `];
                                 } else {
@@ -7913,7 +7794,6 @@ function TapnowApp() {
                     });
 
                     try {
-                        console.log('Veo: 开始发送请求到', endpoint);
                         const resp = await fetch(endpoint, {
                             method: 'POST',
                             headers: {
@@ -7923,9 +7803,7 @@ function TapnowApp() {
                             body: JSON.stringify(veoPayload)
                         });
 
-                        console.log('Veo: 收到响应', { status: resp.status, statusText: resp.statusText });
                         const text = await resp.text();
-                        console.log('Veo: 响应内容', text.substring(0, 500));
 
                         if (!resp.ok) {
                             console.error('Veo: 请求失败', { status: resp.status, text });
@@ -7933,7 +7811,6 @@ function TapnowApp() {
                         }
 
                         const data = JSON.parse(text);
-                        console.log('Veo: 解析后的响应数据', data);
                         const jobId = data?.data?.id || data?.id || data?.task_id || data?.data?.task_id;
 
                         if (!jobId) {
@@ -7941,7 +7818,6 @@ function TapnowApp() {
                             throw new Error('Veo No JobId');
                         }
 
-                        console.log('Veo: 成功获取 JobId', jobId);
                         setHistory(prev => prev.map(h => h.id === taskId ? { ...h, status: 'generating', progress: 10 } : h));
                         pollVeoJob(jobId, taskId, baseUrl, apiKey, w, h);
                         return;
@@ -7971,7 +7847,6 @@ function TapnowApp() {
                     const aspectRatioStr = ratio && ratio !== 'Auto' ? ratio : '3:2'; // 按官方枚举优先 3:2/2:3/1:1
                     const resolutionStr = (resolution && resolution !== 'Auto') ? resolution : '1080P'; // 官方支持 720P/1080P
 
-                    console.log(`[Grok] Starting generation(JSON Mode).Duration: ${durationInt || 'N/A'} (type: ${typeof durationInt}), ratio: ${aspectRatioStr}, resolution: ${resolutionStr} `);
 
                     // 2. 准备基础 Payload
                     const payload = {
@@ -7987,7 +7862,6 @@ function TapnowApp() {
                     // 3. 处理图片：转为 Base64 字符串
                     if (sourceImage) {
                         try {
-                            console.log('[Grok] Converting image to Base64...');
                             let base64Data = '';
 
                             if (sourceImage.startsWith('data:')) {
@@ -8063,7 +7937,6 @@ function TapnowApp() {
                         let finalPrompt = prompt.replace(/@\{([^\}]+)\}/g, (match, username) => {
                             return `@${username} `;
                         });
-                        console.log('[Sora 2] Sending prompt with character references:', finalPrompt);
                         formData.append('model', config?.modelName || 'sora-2');
                         formData.append('prompt', finalPrompt);
                         formData.append('seconds', duration);
@@ -8109,7 +7982,6 @@ function TapnowApp() {
                         let finalPrompt = prompt.replace(/@\{([^\}]+)\}/g, (match, username) => {
                             return `@${username} `;
                         });
-                        console.log('[Sora 2] Sending prompt with character references:', finalPrompt);
                         formData.append('model', config?.modelName || 'sora-2');
                         formData.append('prompt', finalPrompt);
                         formData.append('seconds', duration);
@@ -8208,7 +8080,6 @@ function TapnowApp() {
                         // 检查是否是分镜表的任务，如果是则回填到分镜表
                         const storyboardTask = storyboardTaskMapRef.current.get(taskId);
                         if (storyboardTask) {
-                            console.log('[分镜表] 视频立即返回，回填视频:', { taskId, nodeId: storyboardTask.nodeId, shotId: storyboardTask.shotId, immediateUrl });
                             updateShot(storyboardTask.nodeId, storyboardTask.shotId, {
                                 video_url: immediateUrl,
                                 status: 'done'
@@ -8220,7 +8091,6 @@ function TapnowApp() {
                             const updatedItem = updated.find(h => h.id === taskId);
                             if (updatedItem?.sourceNodeId) {
                                 setTimeout(() => {
-                                    console.log('[Tapnow] 视频立即返回: 准备更新预览窗口', { taskId, immediateUrl, sourceNodeId: updatedItem.sourceNodeId });
                                     updatePreviewFromTask(taskId, immediateUrl, 'video', updatedItem.sourceNodeId);
                                 }, 0);
                             } else {
@@ -8231,18 +8101,15 @@ function TapnowApp() {
                     });
                     return;
                 }
-
                 const jobId = data?.data?.id || data?.id || data?.task_id || data?.data?.task_id || data?.job_id || data?.data?.job_id;
                 if (!jobId) throw new Error(`No Task/Job ID returned. Response: ${JSON.stringify(data).substring(0, 200)}`);
 
-                setHistory(prev => prev.map(h => h.id === taskId ? { ...h, status: 'generating', progress: 10, remoteTaskId: jobId } : h));
                 if (modelId.includes('veo')) pollVeoJob(jobId, taskId, baseUrl, apiKey, w, h);
                 else pollSoraJob(jobId, taskId, baseUrl, apiKey, w, h, modelId);
-            }
+            } // Close if (type === 'video')
         } catch (err) {
             // V3.5.12: If error has shouldRetry flag, recursively retry with new key
             if (err.shouldRetry) {
-                console.log('[Video API] Retrying with new key after blacklist...');
                 // V3.5.31: Pass _isRetry and _existingTaskId to prevent duplicate history items
                 return startGeneration(prompt, type, sourceImages, nodeId, { ...options, _isRetry: true, _existingTaskId: taskId });
             }
@@ -9059,7 +8926,6 @@ function TapnowApp() {
     // V3.7.29 fix4: 添加 options 参数支持条件更新（如 onlyIfStatus）
     // V3.7.30 fix: 移除 setTimeout 包装，直接调用确保状态更新不丢失
     const updateShot = (nodeId, shotId, updates, options = {}) => {
-        console.log(`[updateShot] 开始更新:`, { nodeId, shotId, updates, options });
 
         setNodes(prevNodes => {
             const node = prevNodes.find(n => n.id === nodeId);
@@ -9081,12 +8947,8 @@ function TapnowApp() {
                 shot.id === shotId ? { ...shot, ...updates } : shot
             );
 
-            console.log(`[updateShot] ✅ 更新镜头 ${shotId}:`, {
-                updatedStatus: updates.status,
-                hasImages: !!(updates.output_images?.length),
-                imageCount: updates.output_images?.length || 0,
-                firstImageUrl: updates.output_images?.[0]?.substring(0, 50) + '...' || 'none'
-            });
+            // [Cleaned Log] updateShot info removed
+
 
             // 返回更新后的节点数组
             return prevNodes.map(n =>
@@ -9103,7 +8965,6 @@ function TapnowApp() {
             const type = updates.video_url ? 'video' : 'image';
             const filename = updates.image_filename || '';
 
-            console.log(`[分镜表] 自动更新预览窗口: nodeId=${nodeId}, shotId=${shotId}, type=${type}`);
             setTimeout(() => {
                 updatePreviewFromTask(`temp-${Date.now()}`, finalUrl, type, nodeId, null, filename);
             }, 50);
@@ -9238,7 +9099,6 @@ function TapnowApp() {
             to: storyboardId
         }]);
 
-        console.log('[自动生成分镜表] 已创建分镜表节点，包含', newShots.length, '个镜头');
     };
 
     // 分镜表任务映射：用于追踪从分镜表触发的生成任务
@@ -9340,7 +9200,6 @@ function TapnowApp() {
             }
 
             const data = await resp.json();
-            console.log('[Create Character] Success:', data);
 
             // 7. 保存到角色库
             if (data.id && data.username) {
@@ -9453,7 +9312,6 @@ function TapnowApp() {
             resolution: shot.resolution || '720p'
         };
 
-        console.log('[V3.5.5 Debug] generateSingleShot overrideOptions:', overrideOptions);
 
         // 6. 创建一个特殊的节点ID用于标识这是分镜表的任务
         // V3.5.8: 修复格式，移除多余空格
@@ -9528,7 +9386,6 @@ function TapnowApp() {
             resolution: shot.resolution || 'Auto'
         };
 
-        console.log('[V3.6.1] generateSingleImage overrideOptions:', overrideOptions);
 
         // 6. 创建一个特殊的节点ID用于标识这是分镜表的图片任务
         const virtualNodeId = `storyboard-img-${nodeId}-shot-${shot.id}`;
@@ -9574,17 +9431,14 @@ function TapnowApp() {
             // 1. 上传图片获取 HTTP URL（如果是 data URL）
             let imageUrl = node.content;
             if (imageUrl.startsWith('data:')) {
-                console.log('拓展图片: 开始上传图片获取 HTTP URL...', 'baseUrl:', baseUrl, 'apiKey存在:', !!apiKey);
                 const httpUrl = await uploadImageToGetHttpUrl(imageUrl, baseUrl, apiKey);
                 if (!httpUrl) {
                     console.error('拓展图片: 图片上传失败，所有方法都失败');
                     alert('图片上传失败，无法进行拓展。请检查网络连接和API配置。');
                     return;
                 }
-                console.log('拓展图片: 图片上传成功，HTTP URL:', httpUrl);
                 imageUrl = httpUrl;
             } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-                console.log('拓展图片: 图片已经是HTTP URL，直接使用:', imageUrl);
             } else {
                 console.warn('拓展图片: 图片URL格式未知:', imageUrl.substring(0, 50));
             }
@@ -9643,10 +9497,8 @@ function TapnowApp() {
             const originalTaskId = imagineData.result;
             if (!originalTaskId) throw new Error('未获取到任务ID');
 
-            console.log('拓展图片: 获取到原始任务ID', originalTaskId);
 
             // 4. 等待原始任务完成（ZOOM操作需要原始任务完成）
-            console.log('拓展图片: 等待原始任务完成...', originalTaskId);
             let originalTaskCompleted = false;
             let pollCount = 0;
             const maxPolls = 120; // 最多轮询120次（约10分钟）
@@ -9668,11 +9520,9 @@ function TapnowApp() {
                     const statusData = JSON.parse(statusText);
                     const status = statusData?.status || '';
 
-                    console.log('拓展图片: 原始任务状态检查', { status, pollCount });
 
                     if (status === 'SUCCESS' || status === 'FINISHED') {
                         originalTaskCompleted = true;
-                        console.log('拓展图片: 原始任务已完成，可以执行ZOOM操作');
                     } else if (status === 'FAILURE' || status === 'ERROR' || status === 'CANCELLED') {
                         throw new Error(`原始任务失败: ${status}`);
                     }
@@ -9698,7 +9548,6 @@ function TapnowApp() {
                 // maskBase64 可选，ZOOM 不需要蒙版
             };
 
-            console.log('拓展图片: 调用 ZOOM modal 接口', { taskId: originalTaskId, prompt: zoomPrompt });
 
             const modalResp = await fetch(modalEndpoint, {
                 method: 'POST',
@@ -9722,7 +9571,6 @@ function TapnowApp() {
             const zoomTaskId = modalData.result;
             if (!zoomTaskId) throw new Error('未获取到ZOOM任务ID');
 
-            console.log('拓展图片: 获取到ZOOM任务ID', zoomTaskId);
 
             // 6. 更新历史记录，保存ZOOM任务ID
             setHistory((prev) => prev.map((hItem) =>
@@ -10131,7 +9979,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                     throw new Error(`API 返回内容为空。响应数据: ${JSON.stringify(data).substring(0, 200)}`);
                 }
 
-                console.log('[视频拆解] 提取的内容长度:', aiContent.length, '前100字符:', aiContent.substring(0, 100));
 
                 // 尝试解析 JSON（可能包含 markdown 代码块）
                 let jsonStr = aiContent.trim();
@@ -10142,7 +9989,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                 let result;
                 try {
                     result = JSON.parse(jsonStr);
-                    console.log('[视频拆解] JSON 解析成功，场景索引:', result.scene_index || sceneIndex + 1);
                 } catch (e) {
                     console.error('[视频拆解] 解析 JSON 失败:', e, '内容前500字符:', jsonStr.substring(0, 500));
                     // 尝试修复常见的JSON格式问题
@@ -10152,7 +9998,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                         // 尝试修复尾随逗号
                         jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
                         result = JSON.parse(jsonStr);
-                        console.log('[视频拆解] JSON 修复后解析成功');
                     } catch (e2) {
                         console.error('[视频拆解] JSON修复后仍解析失败:', e2, '原始内容:', jsonStr);
                         // 如果还是失败，创建一个默认结构
@@ -10174,14 +10019,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                 }
 
                 allResults.push(result);
-                console.log('[视频拆解] 场景处理完成，当前结果数:', allResults.length);
 
                 // 更新节点状态
                 setNodes((prev) => prev.map((n) => {
                     if (n.id === nodeId) {
                         const currentResults = n.analysisResults || [];
                         const updatedResults = [...currentResults, result];
-                        console.log('[视频拆解] 更新节点状态，结果数:', updatedResults.length);
                         return { ...n, analysisResults: updatedResults };
                     }
                     return n;
@@ -10213,12 +10056,10 @@ ${inputText.substring(0, 15000)} ... (截断)
             }
 
             // 确保所有结果都已更新到节点
-            console.log('[视频拆解] 所有场景处理完成，总结果数:', allResults.length);
             setNodes((prev) => prev.map((n) => {
                 if (n.id === nodeId) {
                     // 确保使用最新的 allResults
                     const finalResults = allResults.length > 0 ? allResults : (n.analysisResults || []);
-                    console.log('[视频拆解] 最终更新节点，结果数:', finalResults.length);
                     return { ...n, isGenerating: false, analysisResults: finalResults };
                 }
                 return n;
@@ -10248,7 +10089,6 @@ ${inputText.substring(0, 15000)} ... (截断)
         let videoDataUrl = videoInputNode.content;
         if (videoDataUrl.startsWith('blob:')) {
             try {
-                console.log('Converting Blob URL to Base64 for API...');
                 const blob = await fetch(videoDataUrl).then(r => r.blob());
                 videoDataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -10431,7 +10271,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                 throw new Error(`API 返回内容为空。响应数据: ${JSON.stringify(data).substring(0, 200)}`);
             }
 
-            console.log('[AI导演拆解] 提取的内容长度:', aiContent.length, '前100字符:', aiContent.substring(0, 100));
 
             // 解析 JSON
             let jsonStr = aiContent.trim();
@@ -10442,7 +10281,6 @@ ${inputText.substring(0, 15000)} ... (截断)
             let result;
             try {
                 result = JSON.parse(jsonStr);
-                console.log('[AI导演拆解] JSON 解析成功，场景数:', result.scenes?.length || 0);
             } catch (e) {
                 console.error('[AI导演拆解] 解析 JSON 失败:', e, '内容前500字符:', jsonStr.substring(0, 500));
                 // 尝试修复
@@ -10450,7 +10288,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                     jsonStr = jsonStr.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
                     jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
                     result = JSON.parse(jsonStr);
-                    console.log('[AI导演拆解] JSON 修复后解析成功');
                 } catch (e2) {
                     console.error('[AI导演拆解] JSON修复后仍解析失败:', e2, '原始内容:', jsonStr.substring(0, 500));
                     throw new Error(`模型返回的不是有效的 JSON 格式。原始内容: ${jsonStr.substring(0, 200)}`);
@@ -10462,7 +10299,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                 time: idx,
                 text: v.text || ''
             }));
-            console.log('[AI导演拆解] 口播文案数:', voiceoverResults.length);
 
             // 处理 scenes，转换为 analysisResults 格式
             const analysisResults = (result.scenes || []).map((scene, idx) => ({
@@ -10481,12 +10317,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                     color: []
                 }
             }));
-            console.log('[AI导演拆解] 场景数:', analysisResults.length);
 
             // 更新节点状态
             setNodes((prev) => prev.map((n) => {
                 if (n.id === nodeId) {
-                    console.log('[AI导演拆解] 更新节点状态，场景数:', analysisResults.length, '口播数:', voiceoverResults.length);
                     return {
                         ...n,
                         isGenerating: false,
@@ -11019,7 +10853,6 @@ ${inputText.substring(0, 15000)} ... (截断)
         imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
         if (imageFiles.length > 0) {
-            console.log(`[KeyframeOrganizer] Adding ${imageFiles.length} images as keyframes`);
 
             // Get existing data from node
             const existingNode = nodesMap.get(nodeId);
@@ -11037,7 +10870,6 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                     // Save to IndexedDB and get img_id
                     const imgId = await LocalImageManager.saveImage(base64Data);
-                    console.log(`[KeyframeOrganizer] Saved image to IndexedDB: ${imgId}`);
 
                     newKeyframes[idx] = {
                         time: existingFrames.length + idx,  // Use frames count for time
@@ -11058,7 +10890,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 }
                                 : n
                         ));
-                        console.log(`[KeyframeOrganizer] Added ${validKeyframes.length} keyframes to node (stored in IndexedDB)`);
                     }
                 };
                 reader.readAsDataURL(file);
@@ -11108,7 +10939,6 @@ ${inputText.substring(0, 15000)} ... (截断)
         // Sort files by name
         files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
-        console.log(`[KeyframeOrganizer] Inserting ${files.length} images at index ${insertIdx}`);
 
         const existingNode = nodesMap.get(nodeId);
         const existingFrames = existingNode?.frames || [];
@@ -11589,7 +11419,6 @@ ${inputText.substring(0, 15000)} ... (截断)
             try {
                 const base64 = await getBase64FromUrl(imageUrl);
                 imageUrl = `data:image/png;base64,${base64}`;
-                console.log('✅ 已将 Blob URL 转换为 Data URL');
             } catch (e) {
                 console.error('⚠️ Blob URL 转换失败，使用原始 URL:', e);
             }
@@ -11794,7 +11623,6 @@ ${inputText.substring(0, 15000)} ... (截断)
 
     // V3.5.0: 批量下载 (ZIP打包 / 单文件直接下载)
     const handleHistoryBatchDownload = async (items) => {
-        console.log('[V3.5.1 Debug] handleHistoryBatchDownload called with', items?.length, 'items');
         if (!items || items.length === 0) {
             console.warn('[V3.5.1 Debug] No items to download');
             return;
@@ -11838,16 +11666,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                         a.href = url;
                         a.download = filename;
                         a.click();
-                        console.log('✅ 下载完成 (data URL):', filename);
                     } else {
-                        console.log('⏳ 开始下载...', filename);
                         const resp = await fetch(url);
                         const blob = await resp.blob();
                         const a = document.createElement('a');
                         a.href = URL.createObjectURL(blob);
                         a.download = filename;
                         a.click();
-                        console.log('✅ 下载完成:', filename);
                     }
                     setDownloadProgress({ active: false, current: 1, total: 1 });
                 } catch (e) {
@@ -11863,7 +11688,6 @@ ${inputText.substring(0, 15000)} ... (截断)
         const zip = new JSZip();
         let count = 0;
         const totalItems = items.length;
-        console.log(`⏳ 正在打包 ${totalItems} 个项目...`);
 
         // V3.5.12: Set download progress for visible progress bar
         setDownloadProgress({ active: true, current: 0, total: totalItems });
@@ -11929,7 +11753,6 @@ ${inputText.substring(0, 15000)} ... (截断)
             const timestamp = `${now.getFullYear().toString().slice(2)}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
             saveAs(content, `tapnow-assets-${timestamp}.zip`);
 
-            console.log(`✅ 打包完成，已下载 ${count} 个文件`);
             // V3.5.12: Reset download progress
             setDownloadProgress({ active: false, current: 0, total: 0 });
         } catch (e) {
@@ -13163,7 +12986,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ));
                                             }}
                                             onSave={(maskDataUrl) => {
-                                                console.log('蒙版已保存:', maskDataUrl);
                                             }}
                                             onUpdateNode={(nodeId, updates) => {
                                                 setNodes((prev) => prev.map((n) =>
@@ -14422,7 +14244,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 }
                                                             }
                                                             updateNodeSettings(node.id, { shots: mergedShots });
-                                                            console.log(`[KeyframeImport] Imported ${keyframes.length} images, merged to ${mergedShots.length} shots`);
                                                         }}
                                                         className={`text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 ${keyframeCount > 0
                                                             ? 'bg-blue-600 hover:bg-blue-500 text-white'
@@ -14468,7 +14289,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             updateNodeSettings(node.id, { shots: syncedShots });
                                                             // V3.7.29: 显示同步参数 Toast
                                                             showToast(`✓ 已同步 ${syncedShots.length} 个镜头参数 | ${sourceSettings.model || '?'} / ${sourceSettings.ratio || '?'}`, 'success', 5000);
-                                                            console.log(`[BatchSync] Synced ${syncedShots.length} shots`);
                                                         }}
                                                         className={`text-xs px-2 py-1 rounded transition-colors flex items-center gap-1 ${theme === 'dark' ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-500 hover:bg-green-400 text-white'}`}
                                                         onMouseDown={(e) => e.stopPropagation()}
@@ -14568,7 +14388,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             mode: mode
                                                         }));
                                                         setBatchQueue(prev => [...prev, ...newQueueItems]);
-                                                        console.log(`[Batch ${mode}] 已将 ${newQueueItems.length} 个任务添加到队列。当前并发设置: ${batchConcurrency}`);
 
                                                         // V3.7.29: 强制重置状态机，防止 cooling/running 状态阻塞
                                                         if (batchStateRef.current !== 'running') {
@@ -14733,7 +14552,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             const internalText = node.settings?.scriptText || '';
                                                             const text = connectedText || internalText;
 
-                                                            console.log('[ScriptSplitter] Text source:', connectedText ? 'connected node' : 'internal', 'length:', text.length);
                                                             const matches = [];
                                                             // Enhanced split pattern: #1, 【1】, or 1.
                                                             const combinedPattern = /#\s*(\d+)\s*([^#【]*)|【\s*(\d+)\s*】\s*([^#【]*)/g;
@@ -14798,7 +14616,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 shots: mergedShots,
                                                                 scriptExpanded: false // Collapse after split
                                                             });
-                                                            console.log(`[ScriptSplitter] Merged/Generated shots from text`);
                                                         }}
                                                         className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-500 transition-colors"
                                                         onMouseDown={(e) => e.stopPropagation()}
@@ -14877,7 +14694,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     const shouldAppend = existingShots.length > 0 && !window.lastLlmSplitOverwrite;
                                                                     const finalShots = shouldAppend ? [...existingShots, ...newShots] : newShots;
                                                                     updateNodeSettings(node.id, { shots: finalShots, scriptExpanded: false, isGenerating: false });
-                                                                    console.log('[LLM Split] Generated', newShots.length, 'shots');
                                                                 } else {
                                                                     throw new Error('AI 返回格式不正确');
                                                                 }
@@ -17371,14 +17187,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     <div className="relative">
                                         <button
                                             onClick={() => {
-                                                console.log('[V3.5.1 Debug] Download button clicked, historySelection.size =', historySelection.size);
                                                 // 如果有选中的历史项，直接下载选中项
                                                 if (historySelection.size > 0) {
                                                     const selectedItems = [...historySelection].map(id => history.find(h => h.id === id)).filter(Boolean);
-                                                    console.log('[V3.5.1 Debug] Downloading selected items:', selectedItems.length);
                                                     handleHistoryBatchDownload(selectedItems);
                                                 } else {
-                                                    console.log('[V3.5.1 Debug] Opening dropdown menu');
                                                     setActiveDropdown(activeDropdown?.type === 'batch-download' ? null : { type: 'batch-download' });
                                                 }
                                             }}
@@ -17462,12 +17275,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             onDelete={deleteHistoryItem}
                                                             isSelected={historySelection.has(item.id)}
                                                             onSelect={(id) => {
-                                                                console.log('[V3.5.2 Debug] onSelect called, id:', id, 'current Set size:', historySelection.size);
                                                                 setHistorySelection(prev => {
                                                                     const next = new Set(prev);
                                                                     if (next.has(id)) next.delete(id);
                                                                     else next.add(id);
-                                                                    console.log('[V3.5.2 Debug] Updated Set size:', next.size);
                                                                     return next;
                                                                 });
                                                             }}
@@ -17537,12 +17348,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             onDelete={deleteHistoryItem}
                                                             isSelected={historySelection.has(item.id)}
                                                             onSelect={(id) => {
-                                                                console.log('[V3.5.2 Debug] onSelect called (prev), id:', id, 'current Set size:', historySelection.size);
                                                                 setHistorySelection(prev => {
                                                                     const next = new Set(prev);
                                                                     if (next.has(id)) next.delete(id);
                                                                     else next.add(id);
-                                                                    console.log('[V3.5.2 Debug] Updated Set size:', next.size);
                                                                     return next;
                                                                 });
                                                             }}
@@ -18092,7 +17901,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                console.log('[Chat] Dropdown toggle:', !chatModelDropdownOpen);
                                                 setChatModelDropdownOpen(!chatModelDropdownOpen);
                                                 setChatHoveredProvider(null);
                                             }}
@@ -18655,7 +18463,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             a.download = filename;
                                             a.click();
                                             window.URL.revokeObjectURL(blobUrl);
-                                            console.log('✅ 下载完成:', filename);
                                         } catch (err) {
                                             console.error('下载失败:', err);
                                             alert('下载失败，请重试');
@@ -18838,7 +18645,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 a.click();
                                                 window.URL.revokeObjectURL(blobUrl);
                                             }
-                                            console.log('✅ 下载完成:', filename);
                                         } catch (err) {
                                             console.error('下载失败:', err);
                                             showToast('下载失败，请重试', 'error');
@@ -18910,7 +18716,6 @@ ${inputText.substring(0, 15000)} ... (截断)
                             onNavigate={(newIndex) => {
                                 // V3.7.22: 使用 ref 获取最新的 lightboxItem，避免闭包过时
                                 const currentItem = lightboxItemRef.current;
-                                console.log('[onNavigate Debug] Called with:', { newIndex, currentItemMjLength: currentItem?.mjImages?.length, hasStoryboard: !!currentItem?.storyboardContext, selectedIdx: currentItem?.selectedMjImageIndex });
                                 if (currentItem && currentItem.mjImages && currentItem.mjImages.length > newIndex && newIndex >= 0) {
                                     // 确保newIndex在有效范围内
                                     const validIndex = Math.max(0, Math.min(newIndex, currentItem.mjImages.length - 1));

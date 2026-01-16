@@ -17700,8 +17700,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     const existingRefs = currentShot.referenceImages && currentShot.referenceImages.length > 0
                                         ? currentShot.referenceImages
                                         : (currentShot.image_url ? [currentShot.image_url] : []);
-                                    const nextRefs = existingRefs.slice(0, 4);
-                                    if (nextRefs.length < 4) {
+                                    const nextRefs = existingRefs.slice(0, 5);
+                                    if (nextRefs.length < 5) {
                                         nextRefs.push(imageUrl);
                                     } else {
                                         nextRefs[0] = imageUrl;
@@ -18940,7 +18940,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     <div className="absolute top-0 left-0 bg-black/50 text-white text-[8px] px-1 backdrop-blur-sm">{idx + 2}</div>
                                                                                                 </div>
                                                                                             ))}
-                                                                                            {inputImages.length < 4 && (
+                                                                                            {inputImages.length < 5 && (
                                                                                                 <label className={`w-12 h-14 shrink-0 rounded border border-dashed flex items-center justify-center cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 ${borderColor} text-zinc-400 hover:text-blue-500 hover:border-blue-500 transition-colors`}>
                                                                                                     <Plus size={16} />
                                                                                                     <input type="file" className="hidden" accept="image/*" onChange={(e) => {

@@ -667,7 +667,9 @@ const HistoryItem = memo(({
     providers,
     defaultProviders
 }) => {
-    const localCacheFallback = item.localCacheUrl || (item.localCacheMap ? Object.values(item.localCacheMap)[0] : null);
+    const primaryUrl = item.url || item.originalUrl || item.mjOriginalUrl || (item.mjImages && item.mjImages.length > 0 ? item.mjImages[0] : null);
+    const mappedCacheUrl = localCacheActive && item.localCacheMap && primaryUrl ? item.localCacheMap[primaryUrl] : null;
+    const localCacheFallback = mappedCacheUrl || item.localCacheUrl || (item.localCacheMap ? Object.values(item.localCacheMap)[0] : null);
     const hasLocalCache = !!(localCacheActive && localCacheFallback);
     const thumbnailUrl = item.thumbnailUrl || null;
     const canDrag = item.status === 'completed' && (item.type === 'image' || (item.mjImages && item.mjImages.length > 0));
@@ -1297,12 +1299,39 @@ const styles = `
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
         }
+
+        :root {
+            --canvas-grid-color: rgba(0, 0, 0, 0.05);
+        }
+        .theme-dark {
+            --canvas-grid-color: rgba(255, 255, 255, 0.06);
+        }
+        .theme-solarized {
+            --canvas-grid-color: #eee8d5;
+        }
         
         /* 画布容器渲染优化 */
         #canvas-bg {
             transform: translateZ(0);
             backface-visibility: hidden;
             perspective: 1000px;
+            background-image: radial-gradient(var(--canvas-grid-color) 1px, transparent 1px);
+            background-size: 24px 24px;
+            background-position: 0 0;
+        }
+        .theme-solarized #canvas-bg {
+            box-shadow: inset 0 0 0 1px #eee8d5;
+        }
+
+        .theme-solarized button[class*="bg-blue-"],
+        .theme-solarized button[class*="bg-green-"] {
+            background-color: #616161 !important;
+            border-color: #616161 !important;
+            color: #fdf6e3 !important;
+        }
+        .theme-solarized button[class*="bg-blue-"]:hover,
+        .theme-solarized button[class*="bg-green-"]:hover {
+            background-color: #4b4b4b !important;
         }
         
         /* 画布内容容器优化 */
@@ -1382,6 +1411,12 @@ const styles = `
         .theme-solarized button[class*="to-emerald-"]:hover,
         .theme-solarized button[class*="to-indigo-"]:hover {
             background-color: #555555 !important;
+        }
+        .theme-solarized [class*="hover:bg-zinc-100"]:hover {
+            background-color: #fdf6e3 !important;
+        }
+        .theme-solarized [class*="hover:bg-zinc-200"]:hover {
+            background-color: #eee8d5 !important;
         }
         .resize-handle { cursor: nwse-resize; opacity: 0; transition: opacity 0.2s; }
         .node-wrapper:hover .resize-handle { opacity: 1; }
@@ -2991,21 +3026,17 @@ function TapnowApp() {
                 // 过滤掉已删除的模型配置
                 configs = configs.filter(c => !DELETED_MODEL_IDS.includes(c.id));
 
-                // V3.7.22: 去重 - 使用 Map 按 id 去重（保留最后一个）
-                const uniqueMap = new Map();
-                configs.forEach(c => {
-                    if (c.id) uniqueMap.set(c.id, c);
-                });
+                // V3.7.22: 允许同名模型共存（不再按 id 去重）
+                const existingIds = new Set(configs.map(c => c.id).filter(Boolean));
 
                 // V3.7.24: 确保 Chat 模型存在（旧版本可能没有 Chat 类型）
                 const chatModels = DEFAULT_API_CONFIGS.filter(m => m.type === 'Chat');
                 chatModels.forEach(m => {
-                    if (!uniqueMap.has(m.id)) {
-                        uniqueMap.set(m.id, m);
+                    if (!existingIds.has(m.id)) {
+                        configs.push(m);
+                        existingIds.add(m.id);
                     }
                 });
-
-                configs = Array.from(uniqueMap.values());
 
                 // V3.8.2: Ensure every config has a unique internal ID for UI rendering stability
                 // This prevents input focus loss when editing the ID
@@ -3258,6 +3289,7 @@ function TapnowApp() {
     const triedCacheIdsRef = useRef(new Set());
     const localCacheCheckRef = useRef(new Map());
     const cachedHistoryUrlRef = useRef(new Map());
+    const localCachePathRef = useRef({ savePath: '', imageSavePath: '', videoSavePath: '' });
 
     // 持久化性能模式和本地服务器设置
     useEffect(() => {
@@ -3662,12 +3694,24 @@ function TapnowApp() {
         return ext;
     }, []);
 
+    const hashString = useCallback((value) => {
+        let hash = 0;
+        for (let i = 0; i < value.length; i++) {
+            hash = ((hash << 5) - hash) + value.charCodeAt(i);
+            hash |= 0;
+        }
+        return Math.abs(hash).toString(36);
+    }, []);
+
     const getCacheIdFromUrl = useCallback((url, fallbackId) => {
-        const fromUrl = getFilenameFromUrl(url);
-        if (fromUrl) return fromUrl;
         const safeFallback = sanitizeCacheId(fallbackId || '');
-        return safeFallback || `cache_${Date.now()}`;
-    }, [getFilenameFromUrl, sanitizeCacheId]);
+        if (!url) return safeFallback || `cache_${Date.now()}`;
+        const hashed = hashString(url);
+        if (safeFallback) return `${safeFallback}_${hashed}`;
+        const fromUrl = getFilenameFromUrl(url);
+        if (fromUrl) return `${fromUrl}_${hashed}`;
+        return `cache_${hashed}`;
+    }, [getFilenameFromUrl, sanitizeCacheId, hashString]);
 
     const generateThumbnail = useCallback(async (imageUrl, quality = 'normal') => {
         const config = quality === 'ultra'
@@ -3832,7 +3876,7 @@ function TapnowApp() {
         }
     }, [localServerUrl, showToast, normalizeLocalPath]);
 
-    const refreshLocalCache = useCallback(() => {
+    const refreshLocalCache = useCallback((options = {}) => {
         triedCacheIdsRef.current = new Set();
         thumbnailCacheRef.current = new Map();
         localCacheCheckRef.current = new Map();
@@ -3848,8 +3892,26 @@ function TapnowApp() {
             localCacheUrl: null,
             localFilePath: null
         })));
-        showToast('已触发缓存刷新，将重新写入本地缓存路径', 'success');
+        if (!options.silent) {
+            showToast('已触发缓存刷新，将重新写入本地缓存路径', 'success');
+        }
     }, [showToast]);
+
+    useEffect(() => {
+        const nextPath = {
+            savePath: localServerConfig.savePath || '',
+            imageSavePath: localServerConfig.imageSavePath || '',
+            videoSavePath: localServerConfig.videoSavePath || ''
+        };
+        const prevPath = localCachePathRef.current;
+        const changed = prevPath.savePath !== nextPath.savePath
+            || prevPath.imageSavePath !== nextPath.imageSavePath
+            || prevPath.videoSavePath !== nextPath.videoSavePath;
+        localCachePathRef.current = nextPath;
+        if (!localCacheEnabled || !changed) return;
+        if (!prevPath.savePath && !prevPath.imageSavePath && !prevPath.videoSavePath) return;
+        refreshLocalCache({ silent: true });
+    }, [localServerConfig.savePath, localServerConfig.imageSavePath, localServerConfig.videoSavePath, localCacheEnabled, refreshLocalCache]);
 
     const handleHistoryCacheMissing = useCallback((itemId, failedUrl) => {
         if (!itemId) return;
@@ -3884,23 +3946,34 @@ function TapnowApp() {
 
     const resolveHistoryUrl = useCallback((item, specificUrl = null) => {
         if (!item) return '';
+        const preferHistoryPath = !!(localServerConfig.imageSavePath || localServerConfig.videoSavePath);
+        const expectedSegment = preferHistoryPath ? '/file/history/' : '/file/.tapnow_cache/history/';
+        const isCacheUrlMismatch = (url) => url && expectedSegment && !String(url).includes(expectedSegment);
         if (specificUrl) {
             if (localCacheActive && item.localCacheMap && item.localCacheMap[specificUrl]) {
-                return item.localCacheMap[specificUrl];
+                const cached = item.localCacheMap[specificUrl];
+                if (!isCacheUrlMismatch(cached)) return cached;
             }
             return specificUrl;
         }
         const cacheUrl = localCacheActive
             ? (item.localCacheUrl || (item.localCacheMap ? Object.values(item.localCacheMap)[0] : null))
             : null;
+        if (cacheUrl && isCacheUrlMismatch(cacheUrl)) {
+            return item.url || item.originalUrl || item.mjOriginalUrl || '';
+        }
         return cacheUrl || item.url || item.originalUrl || item.mjOriginalUrl || '';
-    }, [localCacheActive]);
+    }, [localCacheActive, localServerConfig.imageSavePath, localServerConfig.videoSavePath]);
 
     const resolveHistoryPreviewUrl = useCallback((item, specificUrl = null) => {
         if (!item) return '';
+        const preferHistoryPath = !!(localServerConfig.imageSavePath || localServerConfig.videoSavePath);
+        const expectedSegment = preferHistoryPath ? '/file/history/' : '/file/.tapnow_cache/history/';
+        const isCacheUrlMismatch = (url) => url && expectedSegment && !String(url).includes(expectedSegment);
         if (specificUrl) {
             if (localCacheActive && item.localCacheMap && item.localCacheMap[specificUrl]) {
-                return item.localCacheMap[specificUrl];
+                const cached = item.localCacheMap[specificUrl];
+                if (!isCacheUrlMismatch(cached)) return cached;
             }
             if (performanceMode !== 'off' && item.mjImages && item.mjThumbnails) {
                 const idx = item.mjImages.indexOf(specificUrl);
@@ -3914,10 +3987,16 @@ function TapnowApp() {
             ? (item.localCacheUrl || (item.localCacheMap ? Object.values(item.localCacheMap)[0] : null))
             : null;
         if (performanceMode === 'off') {
+            if (cacheUrl && isCacheUrlMismatch(cacheUrl)) {
+                return item.url || item.originalUrl || item.mjOriginalUrl || '';
+            }
             return cacheUrl || item.url || item.originalUrl || item.mjOriginalUrl || '';
         }
+        if (cacheUrl && isCacheUrlMismatch(cacheUrl)) {
+            return item.thumbnailUrl || item.url || item.originalUrl || item.mjOriginalUrl || '';
+        }
         return cacheUrl || item.thumbnailUrl || item.url || item.originalUrl || item.mjOriginalUrl || '';
-    }, [localCacheActive, performanceMode]);
+    }, [localCacheActive, localServerConfig.imageSavePath, localServerConfig.videoSavePath, performanceMode]);
 
     const rebuildHistoryThumbnail = useCallback(async (item, options = {}) => {
         if (!item) return;
@@ -4078,18 +4157,9 @@ function TapnowApp() {
         if (!localCacheActive) return;
 
         const cacheHistoryImages = async () => {
-            const baseUrl = (localServerUrl || '').replace(/\/+$/, '');
-            if (!baseUrl) return;
-            const imagePathHint = (localServerConfig.imageSavePath || localServerConfig.savePath || '').toLowerCase();
-            const prefersHistory = imagePathHint.includes('history');
-            const prefersCache = imagePathHint.includes('.tapnow_cache');
-            const baseDirs = prefersHistory && !prefersCache
-                ? ['history', '.tapnow_cache/history']
-                : prefersCache && !prefersHistory
-                    ? ['.tapnow_cache/history', 'history']
-                    : localServerConfig.imageSavePath
-                        ? ['history', '.tapnow_cache/history']
-                        : ['.tapnow_cache/history', 'history'];
+            const preferHistoryPath = !!(localServerConfig.imageSavePath || localServerConfig.videoSavePath);
+            const expectedSegment = preferHistoryPath ? '/file/history/' : '/file/.tapnow_cache/history/';
+            const isCacheUrlMismatch = (url) => url && expectedSegment && !String(url).includes(expectedSegment);
 
             for (const item of history) {
                 if (item.status !== 'completed' || item.type !== 'image') continue;
@@ -4097,6 +4167,20 @@ function TapnowApp() {
                 let localFilePath = item.localFilePath || null;
                 let cacheMap = item.localCacheMap ? { ...item.localCacheMap } : {};
                 let cacheMapUpdated = false;
+
+                if (localCacheUrl && isCacheUrlMismatch(localCacheUrl)) {
+                    localCacheUrl = null;
+                    localFilePath = null;
+                    cacheMapUpdated = true;
+                }
+                if (cacheMap && Object.keys(cacheMap).length > 0) {
+                    Object.entries(cacheMap).forEach(([sourceUrl, cacheUrl]) => {
+                        if (isCacheUrlMismatch(cacheUrl)) {
+                            delete cacheMap[sourceUrl];
+                            cacheMapUpdated = true;
+                        }
+                    });
+                }
 
                 const firstCacheUrl = localCacheUrl || (Object.keys(cacheMap).length > 0 ? Object.values(cacheMap)[0] : null);
                 if (firstCacheUrl) {
@@ -4138,7 +4222,6 @@ function TapnowApp() {
                 const imageUrls = [...new Set(rawImageUrls.filter(Boolean))];
 
                 if (imageUrls.length === 0) continue;
-                const forceCacheId = imageUrls.length > 1;
                 const cachedCount = imageUrls.reduce((count, url) => (cacheMap[url] ? count + 1 : count), 0);
 
                 if (triedCacheIdsRef.current.has(item.id) && cachedCount >= imageUrls.length) continue;
@@ -4148,47 +4231,33 @@ function TapnowApp() {
                     const imageUrl = imageUrls[idx];
                     if (!imageUrl || imageUrl.startsWith('blob:') || imageUrl.includes('...')) continue;
 
+                    const cacheSeed = imageUrls.length > 1 ? `${item.id}-${idx}` : `${item.id}`;
+                    const cacheId = getCacheIdFromUrl(imageUrl, cacheSeed);
+                    const expectedId = sanitizeCacheId(cacheId) || cacheId;
+
+                    if (cacheMap[imageUrl] && expectedId && !String(cacheMap[imageUrl]).includes(expectedId)) {
+                        delete cacheMap[imageUrl];
+                        cacheMapUpdated = true;
+                    }
+
                     if (cachedHistoryUrlRef.current.has(imageUrl)) {
                         const cachedUrl = cachedHistoryUrlRef.current.get(imageUrl);
-                        if (cachedUrl && !cacheMap[imageUrl]) {
-                            cacheMap[imageUrl] = cachedUrl;
-                            cacheMapUpdated = true;
-                        }
-                        if (!localCacheUrl && cachedUrl) {
-                            localCacheUrl = cachedUrl;
-                        }
-                        continue;
-                    }
-
-                    const fallbackId = sanitizeCacheId(`${item.id}-${idx}`) || `${item.id}-${idx}`;
-                    const filenameFromUrl = forceCacheId ? fallbackId : (getFilenameFromUrl(imageUrl) || fallbackId);
-                    let foundLocal = false;
-                    for (const baseDir of baseDirs) {
-                        if (foundLocal) break;
-                        for (const ext of ['.jpg', '.png']) {
-                            try {
-                                const basePath = `${baseDir}/${filenameFromUrl}${ext}`;
-                                const checkUrl = `${baseUrl}/file/${basePath}`;
-                                const checkRes = await fetch(checkUrl, { method: 'HEAD' });
-                                const contentLength = Number(checkRes.headers.get('content-length') || 0);
-                                if (checkRes.ok && !(contentLength > 0 && contentLength < 128)) {
-                                    cachedHistoryUrlRef.current.set(imageUrl, checkUrl);
-                                    cacheMap[imageUrl] = checkUrl;
-                                    cacheMapUpdated = true;
-                                    if (!localCacheUrl) {
-                                        localCacheUrl = checkUrl;
-                                        localFilePath = basePath;
-                                    }
-                                    foundLocal = true;
-                                    break;
-                                }
-                            } catch (e) { }
+                        if (cachedUrl && (isCacheUrlMismatch(cachedUrl) || (expectedId && !String(cachedUrl).includes(expectedId)))) {
+                            cachedHistoryUrlRef.current.delete(imageUrl);
+                        } else {
+                            if (cachedUrl && !cacheMap[imageUrl]) {
+                                cacheMap[imageUrl] = cachedUrl;
+                                cacheMapUpdated = true;
+                            }
+                            if (!localCacheUrl && cachedUrl) {
+                                localCacheUrl = cachedUrl;
+                            }
+                            continue;
                         }
                     }
-                    if (foundLocal) continue;
 
                     try {
-                        const result = await saveImageToLocalCache(`${item.id}-${idx}`, imageUrl, 'history', { forceId: forceCacheId });
+                        const result = await saveImageToLocalCache(cacheId, imageUrl, 'history', { forceId: true });
                         if (result) {
                             cachedHistoryUrlRef.current.set(imageUrl, result.url);
                             cacheMap[imageUrl] = result.url;
@@ -4203,6 +4272,17 @@ function TapnowApp() {
                     }
                 }
 
+                const primaryUrl = imageUrls[0];
+                if (primaryUrl) {
+                    const primaryCacheUrl = cacheMap[primaryUrl] || null;
+                    if (primaryCacheUrl && !isCacheUrlMismatch(primaryCacheUrl)) {
+                        localCacheUrl = primaryCacheUrl;
+                    } else {
+                        localCacheUrl = null;
+                        localFilePath = null;
+                    }
+                }
+
                 if (cacheMapUpdated || localCacheUrl !== item.localCacheUrl) {
                     const nextCacheMap = Object.keys(cacheMap).length > 0 ? cacheMap : null;
                     setHistory(prev => prev.map(h =>
@@ -4214,18 +4294,23 @@ function TapnowApp() {
 
         const timer = setTimeout(cacheHistoryImages, 3000);
         return () => clearTimeout(timer);
-    }, [history, localCacheActive, saveImageToLocalCache, getFilenameFromUrl, sanitizeCacheId, localServerConfig.imageSavePath, localServerConfig.savePath, localServerUrl]);
+    }, [history, localCacheActive, localServerConfig.imageSavePath, localServerConfig.videoSavePath, saveImageToLocalCache, sanitizeCacheId, getCacheIdFromUrl]);
 
     // V2.6.1 Feature: 历史记录本地缓存（视频）
     useEffect(() => {
         if (!localCacheActive) return;
 
         const cacheHistoryVideos = async () => {
-            const baseUrl = (localServerUrl || '').replace(/\/+$/, '');
-            if (!baseUrl) return;
-
+            const preferHistoryPath = !!localServerConfig.videoSavePath;
+            const expectedSegment = preferHistoryPath ? '/file/history/' : '/file/.tapnow_cache/history/';
+            const isCacheUrlMismatch = (url) => url && expectedSegment && !String(url).includes(expectedSegment);
             for (const item of history) {
                 if (item.status !== 'completed' || item.type !== 'video') continue;
+                if (item.localCacheUrl && isCacheUrlMismatch(item.localCacheUrl)) {
+                    setHistory(prev => prev.map(h =>
+                        h.id === item.id ? { ...h, localCacheUrl: null, localFilePath: null } : h
+                    ));
+                }
                 if (item.localCacheUrl) continue;
                 if (triedCacheIdsRef.current.has(item.id)) continue;
                 triedCacheIdsRef.current.add(item.id);
@@ -4233,38 +4318,6 @@ function TapnowApp() {
                 const videoUrl = item.url || item.originalUrl;
                 if (videoUrl && (videoUrl.includes('localhost:') || videoUrl.includes('127.0.0.1:'))) continue;
 
-                const filenameFromUrl = videoUrl ? getFilenameFromUrl(videoUrl) : null;
-                const filenamesToCheck = [filenameFromUrl, item.id].filter(Boolean);
-                let foundLocalVideo = false;
-
-                const videoPathHint = (localServerConfig.videoSavePath || localServerConfig.savePath || '').toLowerCase();
-                const prefersHistory = videoPathHint.includes('history');
-                const prefersCache = videoPathHint.includes('.tapnow_cache');
-                const baseDirs = prefersHistory && !prefersCache
-                    ? ['history', '.tapnow_cache/history']
-                    : prefersCache && !prefersHistory
-                        ? ['.tapnow_cache/history', 'history']
-                        : localServerConfig.videoSavePath
-                            ? ['history', '.tapnow_cache/history']
-                            : ['.tapnow_cache/history', 'history'];
-                for (const baseDir of baseDirs) {
-                    if (foundLocalVideo) break;
-                    for (const filename of filenamesToCheck) {
-                        if (foundLocalVideo) break;
-                        try {
-                            const basePath = `${baseDir}/${filename}.mp4`;
-                            const checkUrl = `${baseUrl}/file/${basePath}`;
-                            const checkRes = await fetch(checkUrl, { method: 'HEAD' });
-                            if (checkRes.ok) {
-                                setHistory(prev => prev.map(h =>
-                                    h.id === item.id ? { ...h, localCacheUrl: checkUrl, localFilePath: basePath } : h
-                                ));
-                                foundLocalVideo = true;
-                            }
-                        } catch (e) { }
-                    }
-                }
-                if (foundLocalVideo) continue;
                 if (!videoUrl || videoUrl.startsWith('blob:') || videoUrl.includes('...')) continue;
 
                 try {
@@ -4282,7 +4335,7 @@ function TapnowApp() {
 
         const timer = setTimeout(cacheHistoryVideos, 5000);
         return () => clearTimeout(timer);
-    }, [history, localCacheActive, saveVideoToLocalCache, getFilenameFromUrl, localServerConfig.videoSavePath, localServerConfig.savePath, localServerUrl]);
+    }, [history, localCacheActive, localServerConfig.videoSavePath, saveVideoToLocalCache]);
 
     const canvasRef = useRef(null);
     const lastMousePos = useRef({ x: 0, y: 0 });
@@ -4446,6 +4499,33 @@ function TapnowApp() {
         return () => window.removeEventListener('keydown', handleHistoryKeyDown);
     }, [historyOpen, history, lightboxItem, resolveHistoryUrl]);
 
+    const MAX_HISTORY_LOCAL_STORAGE = 80;
+
+    const trimHistoryUrlForStorage = (url) => {
+        if (!url) return url;
+        if (url.startsWith('data:') && url.length > 5000) return `${url.substring(0, 100)}...`;
+        return url;
+    };
+
+    const compactHistoryItemForStorage = (item) => {
+        const saved = { ...item };
+        if (saved.url) saved.url = trimHistoryUrlForStorage(saved.url);
+        if (saved.originalUrl) saved.originalUrl = trimHistoryUrlForStorage(saved.originalUrl);
+        if (saved.mjOriginalUrl) saved.mjOriginalUrl = trimHistoryUrlForStorage(saved.mjOriginalUrl);
+        if (Array.isArray(saved.output_images)) {
+            saved.output_images = saved.output_images.slice(0, 12).map(trimHistoryUrlForStorage);
+        }
+        if (Array.isArray(saved.mjImages)) {
+            saved.mjImages = saved.mjImages.slice(0, 12).map(trimHistoryUrlForStorage);
+        }
+        delete saved.mjImageInfo;
+        delete saved.localCacheMap;
+        delete saved.localCacheUrl;
+        delete saved.localFilePath;
+        delete saved.apiConfig;
+        return saved;
+    };
+
     // localStorage 写入防抖函数
     const debouncedSaveHistory = useMemo(() => debounce((historyToSave) => {
         try {
@@ -4457,7 +4537,7 @@ function TapnowApp() {
                 const reduced = historyToSave.map(item => ({
                     id: item.id,
                     type: item.type,
-                    url: item.url,
+                    url: trimHistoryUrlForStorage(item.url),
                     prompt: item.prompt?.substring(0, 200) || '',
                     time: item.time,
                     status: item.status,
@@ -4465,11 +4545,10 @@ function TapnowApp() {
                     width: item.width,
                     height: item.height,
                     ratio: item.ratio,
-                    mjImages: item.mjImages,
+                    mjImages: Array.isArray(item.mjImages) ? item.mjImages.slice(0, 8).map(trimHistoryUrlForStorage) : item.mjImages,
                     selectedMjImageIndex: item.selectedMjImageIndex,
                     mjRatio: item.mjRatio,
-                    mjNeedsSplit: item.mjNeedsSplit,
-                    mjImageInfo: item.mjImageInfo
+                    mjNeedsSplit: item.mjNeedsSplit
                 }));
                 localStorage.setItem('tapnow_history', JSON.stringify(reduced));
             } catch (e2) {
@@ -4479,7 +4558,7 @@ function TapnowApp() {
                     const minimal = historyToSave.map(item => ({
                         id: item.id,
                         type: item.type,
-                        url: item.url,
+                        url: trimHistoryUrlForStorage(item.url),
                         prompt: item.prompt?.substring(0, 100) || '',
                         time: item.time,
                         status: item.status,
@@ -4503,41 +4582,27 @@ function TapnowApp() {
     useEffect(() => {
         try {
             // 只存储必要的元数据，不存储完整的base64图片和长URL
-            const historyToSave = history.map(item => {
-                const saved = { ...item };
-                // V3.4.10: 只对 Midjourney 切割图片清空 mjImages，保留 Jimeng 等其他模型的多图
-                // 判断条件：mjImages 有 4 张图 且 模型为 Midjourney（mj）
-                const isMjModel = item.apiConfig?.modelId?.includes('mj') || item.modelName?.toLowerCase()?.includes('midjourney');
-                if (item.mjImages && item.mjImages.length === 4 && isMjModel) {
-                    // Midjourney: 保存切割标记和原图URL，切割后的图片在需要时重新生成
-                    saved.mjImages = null; // 不保存 MJ base64 数组
-                    saved.mjNeedsSplit = true; // 标记需要重新切割
-                    saved.mjOriginalUrl = item.mjOriginalUrl || item.url; // 保存原图URL
-                }
-                // 其他模型（如 Jimeng）的 mjImages 保持不变
-                // 如果URL是data URL且太长，只保存前100个字符作为标记
-                if (item.url && item.url.startsWith('data:') && item.url.length > 5000) {
-                    saved.url = item.url.substring(0, 100) + '...'; // 只保存前100个字符
-                }
-                // 移除不必要的字段，减少存储大小
-                delete saved.mjImageInfo; // 不保存图片信息
-                return saved;
-            });
+            const historyToSave = history
+                .slice(0, MAX_HISTORY_LOCAL_STORAGE)
+                .map((item) => {
+                    const saved = compactHistoryItemForStorage(item);
+                    // V3.4.10: 只对 Midjourney 切割图片清空 mjImages，保留 Jimeng 等其他模型的多图
+                    // 判断条件：mjImages 有 4 张图 且 模型为 Midjourney（mj）
+                    const isMjModel = item.apiConfig?.modelId?.includes('mj') || item.modelName?.toLowerCase()?.includes('midjourney');
+                    if (item.mjImages && item.mjImages.length === 4 && isMjModel) {
+                        // Midjourney: 保存切割标记和原图URL，切割后的图片在需要时重新生成
+                        saved.mjImages = null; // 不保存 MJ base64 数组
+                        saved.mjNeedsSplit = true; // 标记需要重新切割
+                        saved.mjOriginalUrl = trimHistoryUrlForStorage(item.mjOriginalUrl || item.url); // 保存原图URL
+                    }
+                    return saved;
+                });
             debouncedSaveHistory(historyToSave);
         } catch (e) {
             console.error('保存历史记录失败（可能超出存储配额）:', e);
             // 如果存储失败，尝试清理旧数据，只保留最近20条
             try {
-                const reduced = history.slice(0, 20).map(item => {
-                    const saved = { ...item };
-                    // 移除所有可能很大的字段
-                    if (saved.url && saved.url.startsWith('data:')) {
-                        saved.url = saved.url.substring(0, 100) + '...';
-                    }
-                    if (saved.mjImages) saved.mjImages = null;
-                    if (saved.mjImageInfo) delete saved.mjImageInfo;
-                    return saved;
-                });
+                const reduced = history.slice(0, 20).map(item => compactHistoryItemForStorage(item));
                 debouncedSaveHistory(reduced);
             } catch (e2) {
                 console.error('清理后仍无法保存:', e2);
@@ -4624,20 +4689,102 @@ function TapnowApp() {
     }, [modelLibraryMap]);
 
     // 使用 useMemo 创建 apiConfigs Map，优化配置查找性能（O(1) 查找）
+    // 使用 _uid 作为唯一键，避免同名模型相互覆盖
     const apiConfigsMap = useMemo(() => {
         const map = new Map();
         apiConfigs.forEach((config) => {
             const resolved = resolveApiConfig(config);
-            if (resolved?.id) {
-                map.set(resolved.id, resolved);
+            if (resolved?._uid) {
+                map.set(resolved._uid, resolved);
             }
         });
         return map;
     }, [apiConfigs, resolveApiConfig]);
 
+    const apiConfigsById = useMemo(() => {
+        const map = new Map();
+        apiConfigs.forEach((config) => {
+            const resolved = resolveApiConfig(config);
+            if (!resolved?.id) return;
+            if (!map.has(resolved.id)) map.set(resolved.id, []);
+            map.get(resolved.id).push(resolved);
+        });
+        return map;
+    }, [apiConfigs, resolveApiConfig]);
+
+    const getApiConfigByKey = useCallback((modelKey) => {
+        if (!modelKey) return null;
+        const byUid = apiConfigsMap.get(modelKey);
+        if (byUid) return byUid;
+        const byId = apiConfigsById.get(modelKey);
+        if (!byId || byId.length === 0) return null;
+        if (byId.length === 1) return byId[0];
+        const noLibrary = byId.find(c => !c.libraryId);
+        return noLibrary || byId[0];
+    }, [apiConfigsMap, apiConfigsById]);
+
+    const resolveModelKey = useCallback((modelKey) => {
+        if (!modelKey) return '';
+        if (apiConfigsMap.has(modelKey)) return modelKey;
+        const byId = apiConfigsById.get(modelKey);
+        if (!byId || byId.length === 0) return modelKey;
+        if (byId.length === 1) return byId[0]?._uid || modelKey;
+        const noLibrary = byId.find(c => !c.libraryId);
+        return noLibrary?._uid || byId[0]?._uid || modelKey;
+    }, [apiConfigsMap, apiConfigsById]);
+
+    useEffect(() => {
+        if (!apiConfigs.length) return;
+        setNodes(prev => {
+            let changed = false;
+            const nextNodes = prev.map(node => {
+                if (!node.settings) return node;
+                let settings = node.settings;
+                let settingsChanged = false;
+
+                const normalizeSettingModel = (field) => {
+                    if (!settings?.[field]) return;
+                    const resolved = resolveModelKey(settings[field]);
+                    if (resolved && resolved !== settings[field]) {
+                        if (!settingsChanged) settings = { ...settings };
+                        settings[field] = resolved;
+                        settingsChanged = true;
+                    }
+                };
+
+                normalizeSettingModel('model');
+                normalizeSettingModel('chatModel');
+                normalizeSettingModel('imageModel');
+
+                if (Array.isArray(settings.shots)) {
+                    let shotsChanged = false;
+                    const nextShots = settings.shots.map(shot => {
+                        if (!shot?.model) return shot;
+                        const resolved = resolveModelKey(shot.model);
+                        if (resolved && resolved !== shot.model) {
+                            shotsChanged = true;
+                            return { ...shot, model: resolved };
+                        }
+                        return shot;
+                    });
+                    if (shotsChanged) {
+                        if (!settingsChanged) settings = { ...settings };
+                        settings.shots = nextShots;
+                        settingsChanged = true;
+                    }
+                }
+
+                if (!settingsChanged) return node;
+                changed = true;
+                return { ...node, settings };
+            });
+            return changed ? nextNodes : prev;
+        });
+    }, [apiConfigs.length, resolveModelKey, setNodes]);
+
     // V3.4.19: 统一获取 API 凭据 - 只从 Provider 获取，不再从 Model 获取
     const getApiCredentials = useCallback((modelId) => {
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (!config) {
             return {
                 key: globalApiKey,
@@ -4667,7 +4814,7 @@ function TapnowApp() {
             useProxy: !!provider?.useProxy,
             forceAsync: !!provider?.forceAsync
         };
-    }, [apiConfigsMap, providers, globalApiKey]);
+    }, [getApiConfigByKey, providers, globalApiKey]);
 
     const buildProxyUrl = useCallback((targetUrl, providerKey) => {
         if (!targetUrl) return targetUrl;
@@ -4680,12 +4827,12 @@ function TapnowApp() {
 
     const getModelLabel = useCallback((modelId) => {
         if (!modelId) return '选择模型';
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         return config?.displayName || config?.modelName || config?.id || modelId;
-    }, [apiConfigsMap]);
+    }, [getApiConfigByKey]);
 
     const renderCustomParamInputs = useCallback((modelId, currentValues, onChange) => {
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         const customParams = Array.isArray(config?.customParams) ? config.customParams : [];
         if (!customParams.length) return null;
         const values = currentValues || {};
@@ -4757,7 +4904,7 @@ function TapnowApp() {
                 })}
             </div>
         );
-    }, [apiConfigsMap, theme]);
+    }, [getApiConfigByKey, theme]);
 
     // V3.4.7: 按 Provider 分组的 API 配置（用于两级菜单）
     const groupedApiConfigs = useMemo(() => {
@@ -4791,17 +4938,18 @@ function TapnowApp() {
 
     const getRatiosForModel = useCallback((modelId) => {
         if (!modelId) return RATIOS;
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (config?.ratioLimits && Array.isArray(config.ratioLimits) && config.ratioLimits.length > 0) {
             const normalized = config.ratioLimits.map((ratio) => String(ratio));
             return normalized.includes('Auto') ? normalized : ['Auto', ...normalized];
         }
-        return getDefaultRatiosForModel(modelId);
-    }, [apiConfigsMap]);
+        const resolvedId = config?.id || modelId;
+        return getDefaultRatiosForModel(resolvedId);
+    }, [getApiConfigByKey]);
 
     const getResolutionsForModel = useCallback((modelId) => {
         if (!modelId) return RESOLUTIONS;
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (config?.resolutionLimits && Array.isArray(config.resolutionLimits) && config.resolutionLimits.length > 0) {
             const normalized = config.resolutionLimits
                 .map((res) => normalizeResolutionOption(res))
@@ -4809,11 +4957,12 @@ function TapnowApp() {
             const withAuto = normalized.includes('Auto') ? normalized : ['Auto', ...normalized];
             return Array.from(new Set(withAuto));
         }
-        return getDefaultResolutionsForModel(modelId);
-    }, [apiConfigsMap]);
+        const resolvedId = config?.id || modelId;
+        return getDefaultResolutionsForModel(resolvedId);
+    }, [getApiConfigByKey]);
 
     const getVideoResolutionsForModel = useCallback((modelId) => {
-        const config = modelId ? apiConfigsMap.get(modelId) : null;
+        const config = modelId ? getApiConfigByKey(modelId) : null;
         const baseOptions = Array.isArray(config?.videoResolutions) && config.videoResolutions.length > 0
             ? config.videoResolutions
             : VIDEO_RES_OPTIONS;
@@ -4822,7 +4971,7 @@ function TapnowApp() {
             .filter(Boolean);
         const withAuto = normalized.includes('Auto') ? normalized : ['Auto', ...normalized];
         return Array.from(new Set(withAuto));
-    }, [apiConfigsMap]);
+    }, [getApiConfigByKey]);
 
     // 使用 useMemo 创建 history Map，优化历史记录查找性能（O(1) 查找）
     const historyMap = useMemo(() => {
@@ -6648,15 +6797,17 @@ function TapnowApp() {
         });
     };
 
-    const testApiConnection = async (id) => {
-        setApiTesting(id);
-        setApiStatus((prev) => ({ ...prev, [id]: 'idle' }));
+    const testApiConnection = async (modelKey) => {
+        const config = getApiConfigByKey(modelKey);
+        const statusKey = config?._uid || modelKey;
+        setApiTesting(statusKey);
+        setApiStatus((prev) => ({ ...prev, [statusKey]: 'idle' }));
 
         // V3.4.8: 使用 getApiCredentials 获取 Provider 配置
-        const { key: apiKey, url: baseUrl } = getApiCredentials(id);
+        const { key: apiKey, url: baseUrl } = getApiCredentials(modelKey);
 
         if (!apiKey) {
-            setApiStatus((prev) => ({ ...prev, [id]: 'error' }));
+            setApiStatus((prev) => ({ ...prev, [statusKey]: 'error' }));
             setApiTesting(null);
             return;
         }
@@ -6666,10 +6817,10 @@ function TapnowApp() {
                 method: 'GET',
                 headers: { Authorization: `Bearer ${apiKey}` },
             });
-            if (response.ok) setApiStatus((prev) => ({ ...prev, [id]: 'success' }));
-            else setApiStatus((prev) => ({ ...prev, [id]: 'error' }));
+            if (response.ok) setApiStatus((prev) => ({ ...prev, [statusKey]: 'success' }));
+            else setApiStatus((prev) => ({ ...prev, [statusKey]: 'error' }));
         } catch {
-            setApiStatus((prev) => ({ ...prev, [id]: 'error' }));
+            setApiStatus((prev) => ({ ...prev, [statusKey]: 'error' }));
         }
         setApiTesting(null);
     };
@@ -6865,7 +7016,7 @@ function TapnowApp() {
         if ((!chatInput.trim() && chatFiles.length === 0) || isChatSending) return;
 
         // V3.4.8: 使用 getApiCredentials 获取 Provider 配置
-        const config = apiConfigsMap.get(chatModel);
+        const config = getApiConfigByKey(chatModel);
         const { key: apiKey, url: baseUrl, modelName } = getApiCredentials(chatModel);
 
         if (!apiKey) {
@@ -9878,7 +10029,7 @@ function TapnowApp() {
 
         // 获取正确的模型显示名称（用于历史记录）
         const getModelDisplayName = () => {
-            const config = apiConfigsMap.get(modelId);
+            const config = getApiConfigByKey(modelId);
             // 如果是 jimeng 模型，直接返回 modelId (如 jimeng-4.5, jimeng-video-3.0)
             if (modelId.includes('jimeng')) return modelId;
             // 其他模型优先使用 displayName，再回退到 modelName/id
@@ -9946,7 +10097,7 @@ function TapnowApp() {
                 let payload;
                 let useMultipart = false;
                 // V3.4.20: 获取模型配置用于后续判断
-                const config = apiConfigsMap.get(modelId);
+                const config = getApiConfigByKey(modelId);
                 const customParams = Array.isArray(config?.customParams) ? config.customParams : [];
                 const providerKey = config?.provider;
                 const apiType = credentials.apiType || providers[providerKey]?.apiType || 'openai';
@@ -10835,7 +10986,7 @@ function TapnowApp() {
 
             if (type === 'video') {
                 // V3.4.20: Explicitly define config for video generation block
-                const config = apiConfigsMap.get(modelId);
+                const config = getApiConfigByKey(modelId);
                 const customParams = Array.isArray(config?.customParams) ? config.customParams : [];
                 const applyVideoCustomParams = (payload) => applyCustomParamsToPayload(payload, customParams, customParamSelections);
                 // Veo 3.x 图生视频：按 /v2/videos/generations 规范发送 JSON，使用 images 数组而不是 input_image
@@ -12435,11 +12586,11 @@ function TapnowApp() {
             ...(initialDimensions ? { dimensions: initialDimensions } : {}),
             // V3.4.8: 使用上次使用的模型
             settings: type === 'gen-image'
-                ? { model: lastUsedImageModel, ratio: lastUsedRatio, resolution: lastUsedImageResolution, prompt: '' }
+                ? { model: resolveModelKey(lastUsedImageModel), ratio: lastUsedRatio, resolution: lastUsedImageResolution, prompt: '' }
                 : type === 'gen-video'
-                    ? { model: lastUsedVideoModel, duration: '5s', ratio: lastUsedRatio, resolution: lastUsedVideoResolution, videoPrompt: '' }
+                    ? { model: resolveModelKey(lastUsedVideoModel), duration: '5s', ratio: lastUsedRatio, resolution: lastUsedVideoResolution, videoPrompt: '' }
                     : type === 'video-analyze'
-                        ? { model: lastUsedAnalyzeModel, segmentDuration: parseInt(lastUsedSegmentDuration), analysisMode: 'manual', voiceoverResults: [], analysisResults: [] }
+                        ? { model: resolveModelKey(lastUsedAnalyzeModel), segmentDuration: parseInt(lastUsedSegmentDuration), analysisMode: 'manual', voiceoverResults: [], analysisResults: [] }
                         : type === 'storyboard-node'
                             ? { projectTitle: '未命名分镜', shots: [] }
                                     : type === 'text-node'
@@ -12448,7 +12599,7 @@ function TapnowApp() {
                                         ? { content: '' }
                                         : type === 'extract-characters-scenes'
                                             ? {
-                                                model: lastUsedExtractModel || '',
+                                                model: resolveModelKey(lastUsedExtractModel || ''),
                                                 analysisResults: null,
                                                 lastAnalyzed: null,
                                                 isAnalyzing: false,
@@ -12468,19 +12619,19 @@ function TapnowApp() {
                                                     prompt: '',
                                                     mode: 'video',
                                                     style: 'none',
-                                                    imageModel: lastUsedImageModel,
+                                                    imageModel: resolveModelKey(lastUsedImageModel),
                                                     imageRatio: lastUsedRatio || '16:9',
                                                     imageResolution: lastUsedImageResolution,
                                                     referenceImages: [],
-                                                    chatModel: lastUsedExtractModel || '',
+                                                    chatModel: resolveModelKey(lastUsedExtractModel || ''),
                                                     isEnhancing: false
                                                 }
                                                 : type === 'create-character' || type === 'create-scene'
                                                     ? { name: '', startSecond: 1, endSecond: 3, isCreating: false, createProgress: 0, createError: null }
                                                     : type === 'generate-character-video' || type === 'generate-scene-video'
-                                                        ? { model: lastUsedVideoModel, duration: '15s', ratio: lastUsedRatio || '16:9', resolution: lastUsedVideoResolution, videoPrompt: '', referenceImages: [], sourceType: '', sourceId: '', isGenerating: false, progress: 0, error: null }
-                                                        : (type === 'generate-character-image' || type === 'generate-scene-image')
-                                                            ? { model: lastUsedImageModel, ratio: lastUsedRatio || '16:9', resolution: lastUsedImageResolution, prompt: '', referenceImages: [], chatModel: lastUsedExtractModel || '', imageUrls: [], selectedImageIndex: null, isGenerating: false, progress: 0, error: null }
+                                                    ? { model: resolveModelKey(lastUsedVideoModel), duration: '15s', ratio: lastUsedRatio || '16:9', resolution: lastUsedVideoResolution, videoPrompt: '', referenceImages: [], sourceType: '', sourceId: '', isGenerating: false, progress: 0, error: null }
+                                                    : (type === 'generate-character-image' || type === 'generate-scene-image')
+                                                            ? { model: resolveModelKey(lastUsedImageModel), ratio: lastUsedRatio || '16:9', resolution: lastUsedImageResolution, prompt: '', referenceImages: [], chatModel: resolveModelKey(lastUsedExtractModel || ''), imageUrls: [], selectedImageIndex: null, isGenerating: false, progress: 0, error: null }
                                                             : type === 'local-save'
                                                                 ? { serverUrl: localServerUrl, savePath: '', subfolder: '', autoSave: false, serverStatus: localCacheServerConnected ? 'connected' : 'disconnected', lastSaved: null, savedFiles: [], lastSavedUrls: [] }
                                 : {},
@@ -12608,7 +12759,7 @@ function TapnowApp() {
         const node = nodesMap.get(nodeId);
         if (!node || (node.type !== 'character-description' && node.type !== 'scene-description')) return;
 
-        const modelId = node.settings?.chatModel || lastUsedExtractModel || '';
+        const modelId = resolveModelKey(node.settings?.chatModel || lastUsedExtractModel || '');
         if (!modelId) {
             showToast('请先选择大模型', 'warning', 3000);
             setActiveDropdown({ nodeId, type: 'desc-model' });
@@ -12628,7 +12779,7 @@ function TapnowApp() {
             return;
         }
 
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         const baseUrl = (credentials.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
         const modelName = config?.modelName || modelId;
         const isCharacter = node.type === 'character-description';
@@ -12710,12 +12861,12 @@ function TapnowApp() {
         const rowGap = 450;
         const timestamp = Date.now();
 
-        const defaultVideoModel = lastUsedVideoModel
-            || apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id
-            || apiConfigs.find(c => c.type === 'Video')?.id
+        const defaultVideoModel = resolveModelKey(lastUsedVideoModel)
+            || resolveModelKey(apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id)
+            || resolveModelKey(apiConfigs.find(c => c.type === 'Video')?.id)
             || '';
-        const defaultImageModel = lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
-        const defaultChatModel = lastUsedExtractModel || apiConfigs.find(c => c.type === 'Chat')?.id || '';
+        const defaultImageModel = resolveModelKey(lastUsedImageModel) || resolveModelKey(apiConfigs.find(c => isImageModelType(c.type))?.id) || '';
+        const defaultChatModel = resolveModelKey(lastUsedExtractModel) || resolveModelKey(apiConfigs.find(c => c.type === 'Chat')?.id) || '';
         const defaultRatio = lastUsedRatio || '16:9';
         const defaultVideoResolution = lastUsedVideoResolution || '720p';
         const defaultImageResolution = lastUsedImageResolution || '2K';
@@ -12906,10 +13057,10 @@ function TapnowApp() {
         const created = addNode(targetType, worldX, worldY, descNodeId);
         if (!created?.id) return;
 
-        const defaultImageModel = descNode.settings?.imageModel || lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
+        const defaultImageModel = resolveModelKey(descNode.settings?.imageModel || lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '');
         const defaultRatio = descNode.settings?.imageRatio || lastUsedRatio || '16:9';
         const defaultResolution = descNode.settings?.imageResolution || lastUsedImageResolution || '2K';
-        const defaultChatModel = descNode.settings?.chatModel || lastUsedExtractModel || '';
+        const defaultChatModel = resolveModelKey(descNode.settings?.chatModel || lastUsedExtractModel || '');
 
         const rawPrompt = descNode.settings?.prompt || defaultPrompt;
         const imagePrompt = isCharacter ? stripCharacterVideoSuffix(rawPrompt) : rawPrompt;
@@ -12958,9 +13109,9 @@ function TapnowApp() {
         const created = addNode(targetType, worldX, worldY, descNodeId);
         if (!created?.id) return;
 
-        const defaultVideoModel = lastUsedVideoModel
-            || apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id
-            || apiConfigs.find(c => c.type === 'Video')?.id
+        const defaultVideoModel = resolveModelKey(lastUsedVideoModel)
+            || resolveModelKey(apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id)
+            || resolveModelKey(apiConfigs.find(c => c.type === 'Video')?.id)
             || '';
         const defaultRatio = descNode.settings?.imageRatio || lastUsedRatio || '16:9';
         const defaultResolution = lastUsedVideoResolution || '720p';
@@ -12996,29 +13147,31 @@ function TapnowApp() {
     // 获取模型的默认时长
     const getDefaultDurationForModel = (modelId) => {
         if (!modelId) return '5s';
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (Array.isArray(config?.durations) && config.durations.length > 0) {
             return config.durations[0];
         }
-        if (modelId === 'sora-2-pro') return '15s';
-        if (modelId.includes('sora-2') || modelId === 'sora-2') return '15s';
-        if (modelId.includes('veo') || modelId === 'google-veo3') return '8s';
-        if (modelId.includes('grok') || modelId === 'grok-3') return '8s';
+        const resolvedId = config?.id || modelId;
+        if (resolvedId === 'sora-2-pro') return '15s';
+        if (resolvedId.includes('sora-2') || resolvedId === 'sora-2') return '15s';
+        if (resolvedId.includes('veo') || resolvedId === 'google-veo3') return '8s';
+        if (resolvedId.includes('grok') || resolvedId === 'grok-3') return '8s';
         return '5s';
     };
 
     // 获取模型可用的时长选项
     const getDefaultDurationsForModel = (modelId) => {
         if (!modelId) return ['5s', '10s'];
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (Array.isArray(config?.durations) && config.durations.length > 0) {
             return config.durations;
         }
-        if (modelId === 'sora-2-pro') return ['15s', '25s'];
-        if (modelId.includes('sora-2') || modelId === 'sora-2') return ['5s', '10s', '15s'];
-        if (modelId.includes('veo') || modelId === 'google-veo3') return ['8s'];
-        if (modelId.includes('grok') || modelId === 'grok-3') return ['8s', '5s'];
-        if (modelId.includes('jimeng')) return ['5s', '10s'];  // Jimeng 只支持 5s 和 10s
+        const resolvedId = config?.id || modelId;
+        if (resolvedId === 'sora-2-pro') return ['15s', '25s'];
+        if (resolvedId.includes('sora-2') || resolvedId === 'sora-2') return ['5s', '10s', '15s'];
+        if (resolvedId.includes('veo') || resolvedId === 'google-veo3') return ['8s'];
+        if (resolvedId.includes('grok') || resolvedId === 'grok-3') return ['8s', '5s'];
+        if (resolvedId.includes('jimeng')) return ['5s', '10s'];  // Jimeng 只支持 5s 和 10s
         return ['5s', '10s'];
     };
 
@@ -13035,12 +13188,12 @@ function TapnowApp() {
 
         if (mode === 'image') {
             // 图片模式: 使用图片模型
-            defaultModel = localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
+            defaultModel = resolveModelKey(localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '');
             defaultRatio = '1:1';  // 图片默认1:1
             defaultDuration = undefined;  // 图片没有秒数
         } else {
             // 视频模式: 使用视频模型
-            defaultModel = lastUsedVideoModel || localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '';
+            defaultModel = resolveModelKey(lastUsedVideoModel || localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '');
             defaultRatio = '16:9';  // 视频默认16:9
             defaultDuration = getDefaultDurationForModel(defaultModel);
         }
@@ -13465,8 +13618,8 @@ function TapnowApp() {
         }
 
         // 2. 获取选中的视频模型（必须选择视频模型）
-        const selectedModel = shot.model || (apiConfigs.find(c => c.type === 'Video' && c.id === 'sora-2')?.id || apiConfigs.find(c => c.type === 'Video')?.id || '');
-        const modelConfig = apiConfigsMap.get(selectedModel);
+        const selectedModel = resolveModelKey(shot.model || (apiConfigs.find(c => c.type === 'Video' && c.id === 'sora-2')?.id || apiConfigs.find(c => c.type === 'Video')?.id || ''));
+        const modelConfig = getApiConfigByKey(selectedModel);
 
         if (!modelConfig || modelConfig.type !== 'Video') {
             alert('请先选择一个视频模型');
@@ -13544,8 +13697,8 @@ function TapnowApp() {
         }
 
         // 2. 获取选中的图片模型
-        const selectedModel = shot.model || localStorage.getItem('tapnow_last_image_model') || (apiConfigs.find(c => isImageModelType(c.type))?.id || '');
-        const modelConfig = apiConfigsMap.get(selectedModel);
+        const selectedModel = resolveModelKey(shot.model || localStorage.getItem('tapnow_last_image_model') || (apiConfigs.find(c => isImageModelType(c.type))?.id || ''));
+        const modelConfig = getApiConfigByKey(selectedModel);
 
         if (!modelConfig || !isImageModelType(modelConfig.type)) {
             alert('请先选择一个图片模型');
@@ -13821,13 +13974,13 @@ function TapnowApp() {
         }
 
         // 2. 获取模型配置
-        const modelId = modelOverride || node?.settings?.model || '';
+        const modelId = resolveModelKey(modelOverride || node?.settings?.model || '');
         if (!modelId) {
             showToast('请先选择分析模型', 'error');
             return;
         }
 
-        const config = apiConfigsMap.get(modelId);
+        const config = getApiConfigByKey(modelId);
         if (!config) {
             showToast('模型配置无效', 'error');
             return;
@@ -13980,10 +14133,12 @@ ${inputText.substring(0, 15000)} ... (截断)
 
         if (!targetId) return;
 
-        const modelId = targetNode?.settings?.model
+        const modelId = resolveModelKey(
+            targetNode?.settings?.model
             || nodesMap.get(targetId)?.settings?.model
             || lastUsedExtractModel
-            || '';
+            || ''
+        );
         if (!modelId) {
             showToast('请在“提取角色和场景”节点选择分析模型', 'warning', 4000);
             setActiveDropdown({ nodeId: targetId, type: 'extract-model' });
@@ -14061,11 +14216,11 @@ ${inputText.substring(0, 15000)} ... (截断)
             return;
         }
 
-        const modelId = node.settings?.model || 'gemini-3-pro';
+        const modelId = resolveModelKey(node.settings?.model || 'gemini-3-pro');
         // V3.4.8: 使用 getApiCredentials 获取 Provider 配置
         const { key: apiKey, url: baseUrl } = getApiCredentials(modelId);
         // V3.4.13: 获取完整config用于历史记录显示
-        const config = apiConfigs.find(c => c.id === modelId);
+        const config = getApiConfigByKey(modelId);
 
         if (!apiKey) {
             alert('请先在 API 设置中配置 Key');
@@ -16708,7 +16863,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                         // 处理Midjourney节点的oref和sref输入点
                         // 检查inputType是否为oref或sref（注意：default连接时inputType可能是undefined）
                         if (toNode.type === 'gen-image' && (conn.inputType === 'oref' || conn.inputType === 'sref')) {
-                            const currentModel = apiConfigsMap.get(toNode.settings?.model);
+                            const currentModel = getApiConfigByKey(toNode.settings?.model);
                             const isMidjourney = currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
 
                             if (isMidjourney) {
@@ -16882,7 +17037,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                         // 处理Midjourney节点的oref和sref输入点
                         if (node.type === 'gen-image' && connectingInputType) {
-                            const currentModel = apiConfigsMap.get(node.settings?.model);
+                            const currentModel = getApiConfigByKey(node.settings?.model);
                             const isMidjourney = currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
 
                             if (isMidjourney) {
@@ -17065,7 +17220,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const isAdjacent = selectedId && selectedId !== node.id && adjacentSet && adjacentSet.has(node.id);
 
         // 判断是否为Nano Banana 2模型 - 使用 Map 优化查找（O(1)）
-        const currentModel = apiConfigsMap.get(node.settings?.model);
+        const currentModel = getApiConfigByKey(node.settings?.model);
         const isNanoBanana2 = currentModel
             ? ((currentModel.modelName || currentModel.id || '').includes('nano-banana-2'))
             : ((node.settings?.model || '').includes('nano-banana-2'));
@@ -17081,10 +17236,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                         ? 'ring-1 ring-blue-500'
                         : theme === 'dark'
                             ? 'border border-zinc-800'
-                            : theme === 'solarized'
-                                ? 'border border-[#ddd6c1]'
-                                : 'border border-zinc-200'
-                        } ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#fdf6e3]' : 'bg-white'}`}
+                        : theme === 'solarized'
+                            ? 'border border-[#eee8d5]'
+                        : 'border border-zinc-200'
+                        } ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#eee8d5]' : 'bg-white'}`}
                     style={{
                         left: node.x,
                         top: node.y,
@@ -17092,8 +17247,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                         height: node.height,
                         cursor: (dragNodeId === node.id || (dragNodeId && selectedNodeIds.has(node.id))) ? 'grabbing' : 'default',
                         zIndex: isDragging ? 50 : 10, // 拖动时提升 z-index，避免被其他节点遮挡
-                        border: `1px solid ${theme === 'dark' ? '#3f3f46' : theme === 'solarized' ? '#ddd6c1' : '#e4e4e7'}`,
-                        background: theme === 'dark' ? '#18181b' : theme === 'solarized' ? '#fdf6e3' : '#fff',
+                        border: `1px solid ${theme === 'dark' ? '#3f3f46' : theme === 'solarized' ? '#eee8d5' : '#e4e4e7'}`,
+                        background: theme === 'dark' ? '#18181b' : theme === 'solarized' ? '#eee8d5' : '#fff',
                         boxShadow: 'none',
                         borderRadius: '0',
                         transform: 'translateZ(0)',
@@ -17342,10 +17497,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                         ? 'ring-2 ring-blue-300/60 shadow-blue-300/30'
                         : theme === 'dark'
                             ? 'border border-zinc-800 shadow-black/40'
-                            : theme === 'solarized'
-                                ? 'border border-[#ddd6c1] shadow-black/10'
-                                : 'border border-zinc-200 shadow-black/10'
-                    } ${isHoverTarget && ((connectingSource && connectingSource !== node.id) || (connectingTarget && connectingTarget !== node.id)) ? 'ring-2 ring-green-500/50' : ''} ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#fdf6e3]' : 'bg-white'
+                        : theme === 'solarized'
+                            ? 'border border-[#eee8d5] shadow-black/10'
+                        : 'border border-zinc-200 shadow-black/10'
+                    } ${isHoverTarget && ((connectingSource && connectingSource !== node.id) || (connectingTarget && connectingTarget !== node.id)) ? 'ring-2 ring-green-500/50' : ''} ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#eee8d5]' : 'bg-white'
                     }`}
                 style={{
                     left: node.x,
@@ -17529,7 +17684,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
 
                 <div
-                    className={`overflow-hidden rounded-xl flex-1 flex flex-col pointer-events-none h-full w-full relative ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#fdf6e3]' : 'bg-white'
+                    className={`overflow-hidden rounded-xl flex-1 flex flex-col pointer-events-none h-full w-full relative ${theme === 'dark' ? 'bg-[#18181b]' : theme === 'solarized' ? 'bg-[#eee8d5]' : 'bg-white'
                         }`}
                 >
                     {/* V2.6.1 Feature: New Node Types Rendering */}
@@ -17619,8 +17774,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     key={providerKey}
                                                                     onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                     className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                        ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                        : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                        ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                        : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                         }`}
                                                                 >
                                                                     {group.name || providerKey}
@@ -17631,25 +17786,29 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     <div className="flex-1 pl-1 max-h-80 overflow-y-auto custom-scrollbar">
                                                         {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                             .filter(m => m.type === 'Chat')
-                                                            .map((m) => (
-                                                                <button
-                                                                    key={m.id}
-                                                                    onClick={() => {
-                                                                        updateNodeSettings(node.id, { model: m.id });
-                                                                        setLastUsedExtractModel(m.id);
-                                                                        try { localStorage.setItem('tapnow_last_extract_model', m.id); } catch { }
-                                                                        setActiveDropdown(null);
-                                                                        setHoveredProvider(null);
-                                                                    }}
-                                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.model === m.id
-                                                                        ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                        : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                        }`}
-                                                                >
-                                                                    <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
-                                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                </button>
-                                                            ))}
+                                                            .map((m) => {
+                                                                const modelKey = m._uid || m.id;
+                                                                const currentModelKey = resolveModelKey(node.settings?.model);
+                                                                return (
+                                                                    <button
+                                                                        key={modelKey}
+                                                                        onClick={() => {
+                                                                            updateNodeSettings(node.id, { model: modelKey });
+                                                                            setLastUsedExtractModel(modelKey);
+                                                                            try { localStorage.setItem('tapnow_last_extract_model', modelKey); } catch { }
+                                                                            setActiveDropdown(null);
+                                                                            setHoveredProvider(null);
+                                                                        }}
+                                                                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                            ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                            : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                            }`}
+                                                                    >
+                                                                        <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
+                                                                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         {!hoveredProvider && (
                                                             <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                 ← 选择 Provider
@@ -17903,8 +18062,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             key={providerKey}
                                                                             onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                             className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                                 }`}
                                                                         >
                                                                             {group.name || providerKey}
@@ -17914,25 +18073,29 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             <div className="flex-1 pl-1 max-h-80 overflow-y-auto custom-scrollbar">
                                                                 {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                                     .filter(m => m.type === 'Chat')
-                                                                    .map((m) => (
-                                                                        <button
-                                                                            key={m.id}
-                                                                            onClick={() => {
-                                                                                updateNodeSettings(node.id, { chatModel: m.id });
-                                                                                setLastUsedExtractModel(m.id);
-                                                                                try { localStorage.setItem('tapnow_last_extract_model', m.id); } catch { }
-                                                                                setActiveDropdown(null);
-                                                                                setHoveredProvider(null);
-                                                                            }}
-                                                                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.chatModel === m.id
-                                                                                ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                                : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                                }`}
-                                                                        >
-                                                                            <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
-                                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                        </button>
-                                                                    ))}
+                                                                    .map((m) => {
+                                                                        const modelKey = m._uid || m.id;
+                                                                        const currentModelKey = resolveModelKey(node.settings?.chatModel);
+                                                                        return (
+                                                                            <button
+                                                                                key={modelKey}
+                                                                                onClick={() => {
+                                                                                    updateNodeSettings(node.id, { chatModel: modelKey });
+                                                                                    setLastUsedExtractModel(modelKey);
+                                                                                    try { localStorage.setItem('tapnow_last_extract_model', modelKey); } catch { }
+                                                                                    setActiveDropdown(null);
+                                                                                    setHoveredProvider(null);
+                                                                                }}
+                                                                                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                                    ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                                    : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                                    }`}
+                                                                            >
+                                                                                <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
+                                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                            </button>
+                                                                        );
+                                                                    })}
                                                                 {!hoveredProvider && (
                                                                     <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                         ← 选择 Provider
@@ -18067,11 +18230,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 const elapsedSeconds = nodeTimers[node.id] || 0;
                                 const finalDuration = latestCompleted?.durationMs ? (latestCompleted.durationMs / 1000).toFixed(1) : null;
                                 const isGenerating = !!latestGenerating;
-                                const defaultVideoModel = lastUsedVideoModel
-                                    || apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id
-                                    || apiConfigs.find(c => c.type === 'Video')?.id
+                                const defaultVideoModel = resolveModelKey(lastUsedVideoModel)
+                                    || resolveModelKey(apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'))?.id)
+                                    || resolveModelKey(apiConfigs.find(c => c.type === 'Video')?.id)
                                     || '';
-                                const modelId = node.settings?.model || defaultVideoModel;
+                                const modelId = resolveModelKey(node.settings?.model || defaultVideoModel);
                                 const durationOptions = getDefaultDurationsForModel(modelId);
                                 const storedDuration = node.settings?.duration;
                                 const currentDuration = durationOptions.includes(storedDuration)
@@ -18139,8 +18302,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             key={providerKey}
                                                                             onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                             className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                                 }`}
                                                                         >
                                                                             {group.name || providerKey}
@@ -18150,25 +18313,29 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             <div className="flex-1 pl-1 max-h-80 overflow-y-auto custom-scrollbar">
                                                                 {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                                     .filter(m => m.type === 'Video')
-                                                                    .map((m) => (
-                                                                        <button
-                                                                            key={m.id}
-                                                                            onClick={() => {
-                                                                                updateNodeSettings(node.id, { model: m.id });
-                                                                                setLastUsedVideoModel(m.id);
-                                                                                try { localStorage.setItem('tapnow_last_video_model', m.id); } catch { }
-                                                                                setActiveDropdown(null);
-                                                                                setHoveredProvider(null);
-                                                                            }}
-                                                                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.model === m.id
-                                                                                ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                                : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                                }`}
-                                                                        >
-                                                                            <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
-                                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                        </button>
-                                                                    ))}
+                                                                    .map((m) => {
+                                                                        const modelKey = m._uid || m.id;
+                                                                        const currentModelKey = resolveModelKey(node.settings?.model);
+                                                                        return (
+                                                                            <button
+                                                                                key={modelKey}
+                                                                                onClick={() => {
+                                                                                    updateNodeSettings(node.id, { model: modelKey });
+                                                                                    setLastUsedVideoModel(modelKey);
+                                                                                    try { localStorage.setItem('tapnow_last_video_model', modelKey); } catch { }
+                                                                                    setActiveDropdown(null);
+                                                                                    setHoveredProvider(null);
+                                                                                }}
+                                                                                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                                    ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                                    : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                                    }`}
+                                                                            >
+                                                                                <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
+                                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                            </button>
+                                                                        );
+                                                                    })}
                                                                 {!hoveredProvider && (
                                                                     <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                         ← 选择 Provider
@@ -18356,8 +18523,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     ? latestCompleted.output_images
                                     : (latestCompleted?.mjImages?.length ? latestCompleted.mjImages : (resolvedUrl ? [resolvedUrl] : []));
                                 const selectedImageIndex = node.settings?.selectedImageIndex ?? null;
-                                const defaultImageModel = lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
-                                const modelId = node.settings?.model || defaultImageModel;
+                                const defaultImageModel = resolveModelKey(lastUsedImageModel) || resolveModelKey(apiConfigs.find(c => isImageModelType(c.type))?.id) || '';
+                                const modelId = resolveModelKey(node.settings?.model || defaultImageModel);
 
                                 return (
                                     <>
@@ -18398,8 +18565,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             key={providerKey}
                                                                             onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                             className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                                ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                                : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                                 }`}
                                                                         >
                                                                             {group.name || providerKey}
@@ -18409,25 +18576,29 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             <div className="flex-1 pl-1 max-h-80 overflow-y-auto custom-scrollbar">
                                                                 {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                                     .filter(m => isImageModelType(m.type))
-                                                                    .map((m) => (
-                                                                        <button
-                                                                            key={m.id}
-                                                                            onClick={() => {
-                                                                                updateNodeSettings(node.id, { model: m.id });
-                                                                                setLastUsedImageModel(m.id);
-                                                                                try { localStorage.setItem('tapnow_last_image_model', m.id); } catch { }
-                                                                                setActiveDropdown(null);
-                                                                                setHoveredProvider(null);
-                                                                            }}
-                                                                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.model === m.id
-                                                                                ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                                : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                                }`}
-                                                                        >
-                                                                            <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
-                                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                        </button>
-                                                                    ))}
+                                                                    .map((m) => {
+                                                                        const modelKey = m._uid || m.id;
+                                                                        const currentModelKey = resolveModelKey(node.settings?.model);
+                                                                        return (
+                                                                            <button
+                                                                                key={modelKey}
+                                                                                onClick={() => {
+                                                                                    updateNodeSettings(node.id, { model: modelKey });
+                                                                                    setLastUsedImageModel(modelKey);
+                                                                                    try { localStorage.setItem('tapnow_last_image_model', modelKey); } catch { }
+                                                                                    setActiveDropdown(null);
+                                                                                    setHoveredProvider(null);
+                                                                                }}
+                                                                                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                                    ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                                    : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                                    }`}
+                                                                            >
+                                                                                <span className="text-[10px] font-medium truncate font-mono">{m.displayName || m.modelName || m.id}</span>
+                                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                            </button>
+                                                                        );
+                                                                    })}
                                                                 {!hoveredProvider && (
                                                                     <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                         ← 选择 Provider
@@ -18564,7 +18735,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 onMouseDown={(e) => e.stopPropagation()}
                                                 onClick={() => {
                                                     const prompt = node.settings?.prompt || '';
-                                                    const modelId = node.settings?.model || lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
+                                                    const modelId = resolveModelKey(node.settings?.model || lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '');
                                                     if (!prompt && (!node.settings?.referenceImages || node.settings.referenceImages.length === 0)) {
                                                         alert('请先输入提示词或添加参考图');
                                                         return;
@@ -18876,7 +19047,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     <div className="flex items-center justify-between">
                                         <label className="text-[10px] font-medium opacity-70">自动保存 (新图片)</label>
                                         <button
-                                            className={`w-10 h-5 rounded-full relative transition-colors ${node.settings?.autoSave ? 'bg-green-600' : 'bg-zinc-600'}`}
+                                            className={`w-10 h-5 rounded-full relative transition-colors ${node.settings?.autoSave ? 'bg-green-600' : theme === 'solarized' ? 'bg-zinc-300' : 'bg-zinc-600'}`}
                                             onClick={() => updateNodeSettings(node.id, { autoSave: !node.settings?.autoSave })}
                                             onMouseDown={(e) => e.stopPropagation()}
                                         >
@@ -19146,7 +19317,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             className={`relative w-full h-full flex flex-col transition-colors pointer-events-auto drop-zone video-input-container ${theme === 'dark'
                                 ? 'bg-zinc-900/80'
                             : theme === 'solarized'
-                                ? 'bg-[#fdf6e3]'
+                                ? 'bg-[#eee8d5]'
                                     : 'bg-zinc-100'
                                 }`}
                             /* V3.5.20: Remove global onDrop from container to separate zones */
@@ -19508,7 +19679,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             className={`relative w-full h-full flex flex-col transition-colors pointer-events-auto ${theme === 'dark'
                                 ? 'bg-zinc-900/80'
                             : theme === 'solarized'
-                                ? 'bg-[#fdf6e3]'
+                                ? 'bg-[#eee8d5]'
                                     : 'bg-zinc-100'
                                 }`}
                         >
@@ -19666,7 +19837,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         }`}
                                                                     onMouseDown={(e) => e.stopPropagation()}
                                                                 >
-                                                                    <span className="truncate font-mono">{apiConfigsMap.get(node.settings?.model)?.id || node.settings?.model || 'gemini-3-pro'}</span>
+                                                                    <span className="truncate font-mono">{getApiConfigByKey(node.settings?.model)?.id || node.settings?.model || 'gemini-3-pro'}</span>
                                                                     <ChevronDown size={10} className="opacity-50 shrink-0 ml-1" />
                                                                 </button>
                                                                 {activeDropdown?.nodeId === node.id && activeDropdown.type === 'analyze-model' && (
@@ -19687,8 +19858,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         key={providerKey}
                                                                                         onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                                         className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                                            ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                                            : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                                            ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                                            : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                                             }`}
                                                                                     >
                                                                                         {group.name || providerKey}
@@ -19699,25 +19870,29 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         <div className="flex-1 pl-1 max-h-80 overflow-y-auto custom-scrollbar">
                                                                             {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                                                 .filter(m => m.type === 'Chat')
-                                                                                .map((m) => (
-                                                                                    <button
-                                                                                        key={m.id}
-                                                                                        onClick={() => {
-                                                                                            updateNodeSettings(node.id, { model: m.id });
-                                                                                            setLastUsedAnalyzeModel(m.id);
-                                                                                            try { localStorage.setItem('tapnow_last_analyze_model', m.id); } catch { }
-                                                                                            setActiveDropdown(null);
-                                                                                            setHoveredProvider(null);
-                                                                                        }}
-                                                                                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.model === m.id
-                                                                                            ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                                            : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                                            }`}
-                                                                                    >
-                                                                                        <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
-                                                                                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                                    </button>
-                                                                                ))}
+                                                                                .map((m) => {
+                                                                                    const modelKey = m._uid || m.id;
+                                                                                    const currentModelKey = resolveModelKey(node.settings?.model);
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={modelKey}
+                                                                                            onClick={() => {
+                                                                                                updateNodeSettings(node.id, { model: modelKey });
+                                                                                                setLastUsedAnalyzeModel(modelKey);
+                                                                                                try { localStorage.setItem('tapnow_last_analyze_model', modelKey); } catch { }
+                                                                                                setActiveDropdown(null);
+                                                                                                setHoveredProvider(null);
+                                                                                            }}
+                                                                                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                                                ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                                                : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                                                }`}
+                                                                                        >
+                                                                                            <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
+                                                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
                                                                             {!hoveredProvider && (
                                                                                 <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                                     ← 选择 Provider
@@ -20178,7 +20353,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     className={`flex flex-col h-full rounded-xl overflow-hidden pointer-events-auto transition-colors flex-1 ${theme === 'dark'
                                         ? 'bg-zinc-950 border border-zinc-800'
                                         : theme === 'solarized'
-                                            ? 'bg-[#fdf6e3] border border-[#ddd6c1]'
+                                            ? 'bg-[#eee8d5] border border-[#d7cfb2]'
                                         : 'bg-white border border-zinc-300 shadow-sm'
                                         }`}
                                     onMouseEnter={() => setIsMouseOverStoryboard(true)}
@@ -20188,7 +20363,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     <div className={`px-4 py-3 border-b flex items-center shrink-0 flex-nowrap overflow-x-auto no-scrollbar ${theme === 'dark'
                                         ? 'bg-zinc-900 border-zinc-800'
                                         : theme === 'solarized'
-                                            ? 'bg-[#ddd6c1] border-[#ddd6c1]'
+                                            ? 'bg-[#eee8d5] border-[#eee8d5]'
                                             : 'bg-zinc-50 border-zinc-200'
                                         }`}>
                                         <div className="flex items-center gap-1 shrink-0">
@@ -20244,11 +20419,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         e.stopPropagation();
                                                         // V3.7.19: 切换模式时更新所有镜头的模型为对应类型
                                                         const newMode = 'image';
-                                                        const defaultModel = localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '';
+                                                        const defaultModel = resolveModelKey(localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '');
                                                         const currentShots = node.settings?.shots || [];
                                                         // 只更新那些使用了错误类型模型的镜头
                                                         const updatedShots = currentShots.map(shot => {
-                                                            const shotConfig = apiConfigs.find(c => c.id === shot.model);
+                                                            const shotConfig = getApiConfigByKey(shot.model);
                                                             // 如果当前模型是视频类型，则更新为图片模型
                                                             if (!shotConfig || shotConfig.type === 'Video') {
                                                                 return { ...shot, model: defaultModel, duration: undefined };
@@ -20270,11 +20445,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         e.stopPropagation();
                                                         // V3.7.19: 切换模式时更新所有镜头的模型为对应类型
                                                         const newMode = 'video';
-                                                        const defaultModel = localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '';
+                                                        const defaultModel = resolveModelKey(localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '');
                                                         const currentShots = node.settings?.shots || [];
                                                         // 只更新那些使用了错误类型模型的镜头
                                                         const updatedShots = currentShots.map(shot => {
-                                                            const shotConfig = apiConfigs.find(c => c.id === shot.model);
+                                                            const shotConfig = getApiConfigByKey(shot.model);
                                                             // 如果当前模型是图片类型，则更新为视频模型
                                                             if (!shotConfig || isImageModelType(shotConfig.type)) {
                                                                 return { ...shot, model: defaultModel, duration: getDefaultDurationForModel(defaultModel) };
@@ -20345,7 +20520,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         id: Date.now() + Math.random() + i,
                                                                         prompt: m.text,
                                                                         description: m.text,
-                                                                        model: localStorage.getItem('tapnow_last_video_model') || '',
+                                                                        model: resolveModelKey(localStorage.getItem('tapnow_last_video_model') || ''),
                                                                         duration: 5,
                                                                         status: 'draft',
                                                                         outputEnabled: true,
@@ -20388,7 +20563,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 ...currentShots[i],
                                                                 prompt: currentShots[i]?.prompt ?? '',
                                                                 description: currentShots[i]?.description ?? '',
-                                                                model: currentShots[i]?.model || localStorage.getItem('tapnow_last_video_model') || '',
+                                                                model: resolveModelKey(currentShots[i]?.model || localStorage.getItem('tapnow_last_video_model') || ''),
                                                                 image_url: keyframes[i]?.url ?? currentShots[i]?.image_url ?? '',
                                                                 image_filename: keyframes[i]?.filename || currentShots[i]?.image_filename || '',
                                                                 status: currentShots[i]?.status || 'draft'
@@ -20918,7 +21093,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     {/* V3.5.17: Script Splitter Manual Input (Banner removed in V3.5.24) */}
                                     {
                                         node.settings?.scriptExpanded && (
-                                            <div className={`border-b shrink-0 p-3 space-y-2 ${theme === 'dark' ? 'bg-zinc-900/30 border-zinc-800' : 'bg-zinc-50/50 border-zinc-200'}`}>
+                                            <div className={`border-b shrink-0 p-3 space-y-2 ${theme === 'dark'
+                                                ? 'bg-zinc-900/30 border-zinc-800'
+                                                : theme === 'solarized'
+                                                    ? 'bg-[#fdf6e3] border-[#d7cfb2]'
+                                                    : 'bg-zinc-50/50 border-zinc-200'
+                                                }`}>
                                                 <textarea
                                                     value={node.settings?.scriptText || ''}
                                                     onChange={(e) => updateNodeSettings(node.id, { scriptText: e.target.value })}
@@ -20987,7 +21167,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         id: Date.now() + Math.random() + i,
                                                                         prompt: m.text,
                                                                         description: m.text,
-                                                                        model: localStorage.getItem('tapnow_last_video_model') || '',
+                                                                        model: resolveModelKey(localStorage.getItem('tapnow_last_video_model') || ''),
                                                                         duration: 5,
                                                                         status: 'draft',
                                                                         outputEnabled: true,
@@ -21053,8 +21233,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     // V3.7.27: 获取当前模式的默认模型
                                                                     const mode = node.settings?.mode || 'video';
                                                                     const defaultModel = mode === 'image'
-                                                                        ? (localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '')
-                                                                        : (localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '');
+                                                                        ? resolveModelKey(localStorage.getItem('tapnow_last_image_model') || apiConfigs.find(c => isImageModelType(c.type))?.id || '')
+                                                                        : resolveModelKey(localStorage.getItem('tapnow_last_video_model') || apiConfigs.find(c => c.type === 'Video')?.id || '');
                                                                     const defaultRatio = mode === 'image' ? '1:1' : '16:9';
                                                                     const defaultDuration = mode === 'video' ? getDefaultDurationForModel(defaultModel) : undefined;
 
@@ -21124,7 +21304,9 @@ ${inputText.substring(0, 15000)} ... (截断)
 输出格式为 JSON 数组: [{"prompt": "镜头1的画面描述"}, {"prompt": "镜头2的画面描述"}, ...]
 只输出 JSON，不要其他内容。`}
                                                             onChange={(e) => updateNodeSettings(node.id, { llmSplitPrompt: e.target.value })}
-                                                            className={`flex-1 text-xs p-2 rounded resize-none overflow-y-auto custom-scrollbar ${theme === 'dark' ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-white text-zinc-800 border-zinc-300'} border`}
+                                                            className={`flex-1 text-xs p-2 rounded resize-none overflow-y-auto custom-scrollbar ${theme === 'dark'
+                                                                ? 'bg-zinc-800 text-zinc-200 border-zinc-700'
+                                                                : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800 border-[#eee8d5]' : 'bg-white text-zinc-800 border-zinc-300'} border`}
                                                             rows={3}
                                                             placeholder="输入自定义 LLM 拆分 Prompt..."
                                                             onMouseDown={(e) => e.stopPropagation()}
@@ -21142,7 +21324,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                                     {/* List */}
                                     <div
-                                        className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 min-h-0 bg-opacity-50"
+                                        className={`flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 min-h-0 bg-opacity-50 ${theme === 'solarized' ? 'bg-[#fdf6e3]' : ''}`}
                                         onWheel={(e) => {
                                             e.stopPropagation();
                                         }}
@@ -21162,7 +21344,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     id: Date.now() + Math.random(),
                                                                     prompt: '',
                                                                     description: '',
-                                                                    model: localStorage.getItem('tapnow_last_video_model') || '',
+                                                                    model: resolveModelKey(localStorage.getItem('tapnow_last_video_model') || ''),
                                                                     duration: 5,
                                                                     status: 'draft',
                                                                     outputEnabled: true,
@@ -21212,7 +21394,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     {(() => {
                                                                         const mode = node.settings?.mode || 'video';
                                                                         const isVideo = mode === 'video';
-                                                                        const supportsFirstLastFrame = !!apiConfigsMap.get(shot.model)?.supportsFirstLastFrame;
+                                                                        const supportsFirstLastFrame = !!getApiConfigByKey(shot.model)?.supportsFirstLastFrame;
                                                                         const showLastFrame = supportsFirstLastFrame && shot.useFirstLastFrame;
                                                                         const activeInput = shot.activeInput || 'first';
                                                                         const showMultiRef = shot.useMultiRef; // Toggle State
@@ -21430,7 +21612,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         const mode = node.settings?.mode || 'video';
                                                                                         const lastModelKey = mode === 'image' ? 'tapnow_last_image_model' : 'tapnow_last_video_model';
                                                                                         // V3.7.29: 只显示 shot.model，不 fallback 到 localStorage（避免假联动）
-                                                                                        return apiConfigsMap.get(shot.model)?.id || shot.model || '选择模型';
+                                                                                        return getApiConfigByKey(shot.model)?.id || shot.model || '选择模型';
                                                                                     })()}
                                                                                 </span>
                                                                                 <ChevronDown size={10} className="opacity-50 shrink-0" />
@@ -21456,8 +21638,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                         key={providerKey}
                                                                                                         onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                                                         className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${hoveredProvider === providerKey
-                                                                                                            ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                                                            : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'
+                                                                                                            ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                                                            : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'
                                                                                                             }`}
                                                                                                     >
                                                                                                         {group.name || providerKey}
@@ -21472,37 +21654,41 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             const isImageMode = mode === 'image';
                                                                                             return hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                                                                 .filter(m => (isImageMode ? isImageModelType(m.type) : m.type === 'Video'))
-                                                                                                .map((m) => (
-                                                                                                    <button
-                                                                                                        key={m.id}
-                                                                                                        onClick={() => {
-                                                                                                            const mode = node.settings?.mode || 'video';
-                                                                                                            const defaultDuration = getDefaultDurationForModel(m.id);
-                                                                                                            updateShot(node.id, shot.id, {
-                                                                                                                model: m.id,
-                                                                                                                duration: shot.duration || defaultDuration
-                                                                                                            });
-                                                                                                            // V3.6.0.fuckedup: 根据模式保存最后使用的模型
-                                                                                                            const lastModelKey = mode === 'image' ? 'tapnow_last_image_model' : 'tapnow_last_video_model';
-                                                                                                            localStorage.setItem(lastModelKey, m.id);
-                                                                                                            // 同步到 state
-                                                                                                            if (mode === 'image') {
-                                                                                                                setLastUsedImageModel(m.id);
-                                                                                                            } else {
-                                                                                                                setLastUsedVideoModel(m.id);
-                                                                                                            }
-                                                                                                            setActiveDropdown(null);
-                                                                                                            setHoveredProvider(null);
-                                                                                                        }}
-                                                                                                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${shot.model === m.id
-                                                                                                            ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                                                            : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                                                            }`}
-                                                                                                    >
-                                                                                                        <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
-                                                                                                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                                                    </button>
-                                                                                                ));
+                                                                                                .map((m) => {
+                                                                                                    const modelKey = m._uid || m.id;
+                                                                                                    const currentModelKey = resolveModelKey(shot.model);
+                                                                                                    return (
+                                                                                                        <button
+                                                                                                            key={modelKey}
+                                                                                                            onClick={() => {
+                                                                                                                const mode = node.settings?.mode || 'video';
+                                                                                                                const defaultDuration = getDefaultDurationForModel(modelKey);
+                                                                                                                updateShot(node.id, shot.id, {
+                                                                                                                    model: modelKey,
+                                                                                                                    duration: shot.duration || defaultDuration
+                                                                                                                });
+                                                                                                                // V3.6.0.fuckedup: 根据模式保存最后使用的模型
+                                                                                                                const lastModelKey = mode === 'image' ? 'tapnow_last_image_model' : 'tapnow_last_video_model';
+                                                                                                                localStorage.setItem(lastModelKey, modelKey);
+                                                                                                                // 同步到 state
+                                                                                                                if (mode === 'image') {
+                                                                                                                    setLastUsedImageModel(modelKey);
+                                                                                                                } else {
+                                                                                                                    setLastUsedVideoModel(modelKey);
+                                                                                                                }
+                                                                                                                setActiveDropdown(null);
+                                                                                                                setHoveredProvider(null);
+                                                                                                            }}
+                                                                                                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                                                                ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                                                                : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                                                                }`}
+                                                                                                        >
+                                                                                                            <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
+                                                                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                                                        </button>
+                                                                                                    );
+                                                                                                });
                                                                                         })()}
                                                                                         {!hoveredProvider && (
                                                                                             <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
@@ -21599,7 +21785,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {/* Duration Select - V3.7.18: 只在视频模式显示 */}
                                                                         {(node.settings?.mode || 'video') === 'video' && (() => {
                                                                             const currentModel = shot.model || (apiConfigs.find(c => c.type === 'Video' && c.id === 'sora-2')?.id || apiConfigs.find(c => c.type === 'Video')?.id || '');
-                                                                            const config = apiConfigsMap.get(currentModel);
+                                                                            const config = getApiConfigByKey(currentModel);
                                                                             const availableDurations = config?.durations || getDefaultDurationsForModel(currentModel);
                                                                             const defaultDuration = getDefaultDurationForModel(currentModel);
                                                                             return (
@@ -21621,7 +21807,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         })()}
                                                                         {(node.settings?.mode || 'video') === 'video' && (() => {
                                                                             const modelId = shot.model || '';
-                                                                            const config = apiConfigsMap.get(modelId);
+                                                                            const config = getApiConfigByKey(modelId);
                                                                             const supportsFirstLastFrame = !!config?.supportsFirstLastFrame;
                                                                             const supportsHD = !!config?.supportsHD;
                                                                             if (!supportsFirstLastFrame && !supportsHD) return null;
@@ -22340,7 +22526,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     <div className={`p-3 border-t shrink-0 ${theme === 'dark'
                                         ? 'bg-zinc-900 border-zinc-800'
                                         : theme === 'solarized'
-                                            ? 'bg-[#ddd6c1] border-[#ddd6c1]'
+                                            ? 'bg-[#eee8d5] border-[#eee8d5]'
                                             : 'bg-zinc-50 border-zinc-200'
                                         }`}>
                                         <button
@@ -22698,7 +22884,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     {/* 角色引用栏 (仅 Sora 模型) */}
                                     {node.type === 'gen-video' && (() => {
                                         const currentModel = node.settings?.model || '';
-                                        const modelConfig = apiConfigsMap.get(currentModel);
+                                        const modelConfig = getApiConfigByKey(currentModel);
                                         const modelName = modelConfig?.modelName || modelConfig?.id || currentModel;
                                         const isSora = modelName && (modelName.includes('sora') || currentModel.includes('sora'));
 
@@ -22790,7 +22976,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                                     {/* 首尾帧 UI（仅支持首尾帧且开启时显示） */}
                                     {node.type === 'gen-video' && (() => {
-                                        const currentModel = apiConfigsMap.get(node.settings?.model);
+                                        const currentModel = getApiConfigByKey(node.settings?.model);
                                         const supportsFirstLastFrame = !!currentModel?.supportsFirstLastFrame;
                                         const useFirstLastFrame = !!(node.settings?.useFirstLastFrame || node.settings?.veoFramesMode);
                                         if (!supportsFirstLastFrame || !useFirstLastFrame) return null;
@@ -22882,7 +23068,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                                     {/* Midjourney指令UI: oref, ow, sref */}
                                     {node.type === 'gen-image' && (() => {
-                                        const currentModel = apiConfigsMap.get(node.settings?.model);
+                                        const currentModel = getApiConfigByKey(node.settings?.model);
                                         const isMidjourney = currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
                                         return isMidjourney;
                                     })() && (() => {
@@ -23085,15 +23271,17 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     >
                                         <div className="relative flex-1 min-w-0">
                                             <button
-                                                title={apiConfigsMap.get(node.settings?.model)?.provider}
+                                                title={getApiConfigByKey(node.settings?.model)?.provider}
                                                 onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown?.type === 'model' ? null : { nodeId: node.id, type: 'model' }); }}
                                                 className={`flex items-center gap-2 pl-1 pr-2 py-1 rounded text-[10px] transition-colors border w-full ${theme === 'dark'
                                                     ? 'bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 border-zinc-700/50'
-                                                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
+                                                    : theme === 'solarized'
+                                                        ? 'bg-[#fdf6e3] hover:bg-[#eee8d5] text-zinc-700 border-[#d7cfb2]'
+                                                        : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
                                                     }`}
                                             >
-                                                <span className={`w-2 h-2 rounded-full ${getStatusColor(node.settings?.model)}`}></span>
-                                                <span className="truncate font-mono">{apiConfigsMap.get(node.settings?.model)?.id || 'Model'}</span>
+                                                <span className={`w-2 h-2 rounded-full ${getStatusColor(resolveModelKey(node.settings?.model))}`}></span>
+                                                <span className="truncate font-mono">{getApiConfigByKey(node.settings?.model)?.id || 'Model'}</span>
                                             </button>
                                             {activeDropdown?.nodeId === node.id && activeDropdown.type === 'model' && (
                                                 <div
@@ -23113,8 +23301,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     key={providerKey}
                                                                     onMouseEnter={() => setHoveredProvider(providerKey)}
                                                                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left text-[10px] transition-colors ${hoveredProvider === providerKey
-                                                                        ? theme === 'dark' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-200 text-zinc-900'
-                                                                        : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-600'
+                                                                        ? theme === 'dark' ? 'bg-zinc-700 text-zinc-100' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-200 text-zinc-900'
+                                                                        : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-400' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-600'
                                                                         }`}
                                                                 >
                                                                     <span className="truncate font-medium">{group.name}</span>
@@ -23126,37 +23314,41 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     <div className="flex-1 pl-1 max-h-64 overflow-y-auto custom-scrollbar flex flex-col justify-end">
                                                         {hoveredProvider && groupedApiConfigs[hoveredProvider]?.models
                                                             .filter(m => (node.type === 'gen-image' ? isImageModelType(m.type) : m.type === 'Video'))
-                                                            .map((m) => (
-                                                                <button
-                                                                    key={m.id}
-                                                                    onClick={() => {
-                                                                        const nextSettings = { model: m.id };
-                                                                        if (m.id === 'grok-3') {
-                                                                            nextSettings.ratio = '3:2';
-                                                                            nextSettings.duration = '8s';
-                                                                            nextSettings.resolution = '1080P';
-                                                                        }
-                                                                        updateNodeSettings(node.id, nextSettings);
-                                                                        // V3.4.8: 记住上次使用的模型
-                                                                        if (node.type === 'gen-image') {
-                                                                            setLastUsedImageModel(m.id);
-                                                                            try { localStorage.setItem('tapnow_last_image_model', m.id); } catch { }
-                                                                        } else if (node.type === 'gen-video') {
-                                                                            setLastUsedVideoModel(m.id);
-                                                                            try { localStorage.setItem('tapnow_last_video_model', m.id); } catch { }
-                                                                        }
-                                                                        setActiveDropdown(null);
-                                                                        setHoveredProvider(null);
-                                                                    }}
-                                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${node.settings?.model === m.id
-                                                                        ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                        : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'
-                                                                        }`}
-                                                                >
-                                                                    <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
-                                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                                </button>
-                                                            ))}
+                                                            .map((m) => {
+                                                                const modelKey = m._uid || m.id;
+                                                                const currentModelKey = resolveModelKey(node.settings?.model);
+                                                                return (
+                                                                    <button
+                                                                        key={modelKey}
+                                                                        onClick={() => {
+                                                                            const nextSettings = { model: modelKey };
+                                                                            if (m.id === 'grok-3') {
+                                                                                nextSettings.ratio = '3:2';
+                                                                                nextSettings.duration = '8s';
+                                                                                nextSettings.resolution = '1080P';
+                                                                            }
+                                                                            updateNodeSettings(node.id, nextSettings);
+                                                                            // V3.4.8: 记住上次使用的模型
+                                                                            if (node.type === 'gen-image') {
+                                                                                setLastUsedImageModel(modelKey);
+                                                                                try { localStorage.setItem('tapnow_last_image_model', modelKey); } catch { }
+                                                                            } else if (node.type === 'gen-video') {
+                                                                                setLastUsedVideoModel(modelKey);
+                                                                                try { localStorage.setItem('tapnow_last_video_model', modelKey); } catch { }
+                                                                            }
+                                                                            setActiveDropdown(null);
+                                                                            setHoveredProvider(null);
+                                                                        }}
+                                                                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                            ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                            : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                            }`}
+                                                                    >
+                                                                        <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
+                                                                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         {!hoveredProvider && (
                                                             <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                                 ← 选择 Provider
@@ -23169,7 +23361,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                                         {/* Midjourney版本选择器 */}
                                         {node.type === 'gen-image' && (() => {
-                                            const currentModel = apiConfigsMap.get(node.settings?.model);
+                                            const currentModel = getApiConfigByKey(node.settings?.model);
                                             return currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
                                         })() && (
                                                 <div className="relative flex-1 min-w-0">
@@ -23178,7 +23370,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown?.type === 'mjVersion' && activeDropdown.nodeId === node.id ? null : { nodeId: node.id, type: 'mjVersion' }); }}
                                                         className={`flex items-center gap-2 pl-1 pr-2 py-1 rounded text-[10px] transition-colors border w-full ${theme === 'dark'
                                                             ? 'bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 border-zinc-700/50'
-                                                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
+                                                            : theme === 'solarized'
+                                                                ? 'bg-[#fdf6e3] hover:bg-[#eee8d5] text-zinc-700 border-[#d7cfb2]'
+                                                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border-zinc-300'
                                                             }`}
                                                     >
                                                         <span className="truncate">{MJ_VERSIONS.find(v => v.value === node.settings?.mjVersion)?.label || 'MJ V7'}</span>
@@ -23200,8 +23394,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     }}
                                                                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${theme === 'dark'
                                                                         ? 'hover:bg-zinc-800 text-zinc-300'
-                                                                        : 'hover:bg-zinc-100 text-zinc-700'
-                                                                        } ${node.settings?.mjVersion === v.value ? (theme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-100') : ''}`}
+                                                                        : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'
+                                                                        } ${node.settings?.mjVersion === v.value ? (theme === 'dark' ? 'bg-zinc-800' : theme === 'solarized' ? 'bg-[#fdf6e3]' : 'bg-zinc-100') : ''}`}
                                                                 >
                                                                     <span className="text-xs font-medium">{v.label}</span>
                                                                     {node.settings?.mjVersion === v.value && (
@@ -23222,7 +23416,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     onClick={e => { e.stopPropagation(); setActiveDropdown(activeDropdown?.type === 'ratio' && activeDropdown.nodeId === node.id ? null : { nodeId: node.id, type: 'ratio' }); }}
                                                     className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] border ${theme === 'dark'
                                                         ? 'bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 border-zinc-700/50'
-                                                        : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
+                                                        : theme === 'solarized'
+                                                            ? 'bg-[#fdf6e3] hover:bg-[#eee8d5] text-zinc-600 border-[#d7cfb2]'
+                                                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
                                                         }`}
                                                 >
                                                     {node.settings?.ratio || 'Auto'}
@@ -23246,7 +23442,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 }}
                                                                 className={`w-full text-center py-1 text-[10px] rounded ${theme === 'dark'
                                                                     ? 'text-zinc-300 hover:bg-zinc-800'
-                                                                    : 'text-zinc-700 hover:bg-zinc-100'
+                                                                    : theme === 'solarized' ? 'text-zinc-700 hover:bg-[#fdf6e3]' : 'text-zinc-700 hover:bg-zinc-100'
                                                                     }`}
                                                             >
                                                                 {r}
@@ -23257,7 +23453,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             </div>
 
                                             {node.type === 'gen-video' && (() => {
-                                                const currentModel = apiConfigsMap.get(node.settings?.model);
+                                                const currentModel = getApiConfigByKey(node.settings?.model);
                                                 const modelId = currentModel?.id || currentModel?.modelName || '';
                                                 const resolutionOptions = getVideoResolutionsForModel(modelId);
                                                 if (!resolutionOptions.length) return null;
@@ -23275,7 +23471,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             onClick={e => { e.stopPropagation(); setActiveDropdown(activeDropdown?.type === 'vres' && activeDropdown.nodeId === node.id ? null : { nodeId: node.id, type: 'vres' }); }}
                                                             className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] border ${theme === 'dark'
                                                                 ? 'bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 border-zinc-700/50'
-                                                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
+                                                                : theme === 'solarized'
+                                                                    ? 'bg-[#fdf6e3] hover:bg-[#eee8d5] text-zinc-600 border-[#d7cfb2]'
+                                                                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
                                                                 }`}
                                                         >
                                                             {resolvedResolution === 'Auto' ? '不选' : resolvedResolution}
@@ -23299,10 +23497,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             }
                                                                             setActiveDropdown(null);
                                                                         }}
-                                                                        className={`w-full text-center py-1 text-[10px] rounded ${theme === 'dark'
-                                                                            ? 'text-zinc-300 hover:bg-zinc-800'
-                                                                            : 'text-zinc-700 hover:bg-zinc-100'
-                                                                            }`}
+                                                                className={`w-full text-center py-1 text-[10px] rounded ${theme === 'dark'
+                                                                    ? 'text-zinc-300 hover:bg-zinc-800'
+                                                                    : theme === 'solarized' ? 'text-zinc-700 hover:bg-[#fdf6e3]' : 'text-zinc-700 hover:bg-zinc-100'
+                                                                    }`}
                                                                     >
                                                                         {r === 'Auto' ? '不选' : r}
                                                                     </button>
@@ -23314,7 +23512,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             })()}
 
                                             {node.type === 'gen-image' && (() => {
-                                                const currentModel = apiConfigsMap.get(node.settings?.model);
+                                                const currentModel = getApiConfigByKey(node.settings?.model);
                                                 const isMidjourney = currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
                                                 return !isMidjourney;
                                             })() ? (
@@ -23323,11 +23521,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         onClick={e => { e.stopPropagation(); setActiveDropdown(activeDropdown?.type === 'res' && activeDropdown.nodeId === node.id ? null : { nodeId: node.id, type: 'res' }); }}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] border ${theme === 'dark'
                                                             ? 'bg-zinc-800/50 hover:bg-zinc-800 text-zinc-400 border-zinc-700/50'
-                                                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
+                                                            : theme === 'solarized'
+                                                                ? 'bg-[#fdf6e3] hover:bg-[#eee8d5] text-zinc-600 border-[#d7cfb2]'
+                                                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border-zinc-300'
                                                             }`}
                                                     >
                                                         {(() => {
-                                                            const currentModel = apiConfigsMap.get(node.settings?.model);
+                                                            const currentModel = getApiConfigByKey(node.settings?.model);
                                                             const modelId = currentModel?.id || currentModel?.modelName || '';
                                                             const availableResolutions = getResolutionsForModel(modelId);
                                                             const currentResolution = node.settings?.resolution || '2K';
@@ -23350,7 +23550,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         })()}
                                                     </button>
                                                     {activeDropdown?.nodeId === node.id && activeDropdown.type === 'res' && (() => {
-                                                        const currentModel = apiConfigsMap.get(node.settings?.model);
+                                                        const currentModel = getApiConfigByKey(node.settings?.model);
                                                         const modelId = currentModel?.id || currentModel?.modelName || '';
                                                         const availableResolutions = getResolutionsForModel(modelId);
                                                         return (
@@ -23372,7 +23572,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         }}
                                                                         className={`w-full text-center py-1 text-[10px] rounded ${theme === 'dark'
                                                                             ? 'text-zinc-300 hover:bg-zinc-800'
-                                                                            : 'text-zinc-700 hover:bg-zinc-100'
+                                                                            : theme === 'solarized' ? 'text-zinc-700 hover:bg-[#fdf6e3]' : 'text-zinc-700 hover:bg-zinc-100'
                                                                             }`}
                                                                     >
                                                                         {r}
@@ -23384,7 +23584,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 </div>
                                             ) : (
                                                 (() => {
-                                                    const currentModel = apiConfigsMap.get(node.settings?.model);
+                                                    const currentModel = getApiConfigByKey(node.settings?.model);
                                                     const isMidjourney = currentModel && (currentModel.id.includes('mj') || currentModel.provider.toLowerCase().includes('midjourney'));
                                                     const durationOptions = getDefaultDurationsForModel(node.settings?.model);
                                                     const storedDuration = node.settings?.duration;
@@ -24043,7 +24243,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             <span>{localCacheServerConnected ? '本地缓存已连接 - 图片将优先从本地读取' : '本地缓存未连接'}</span>
                                         </div>
                                         <button
-                                            onClick={() => setLocalCacheEnabled(false)}
+                                            onClick={() => {
+                                                setLocalCacheEnabled(false);
+                                                setLocalCacheBannerVisible(false);
+                                            }}
                                             className={`p-0.5 rounded ${theme === 'dark'
                                                 ? 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
                                                 : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200'
@@ -24121,6 +24324,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 const group = item.batchId && groupMap.has(item.batchId)
                                                     ? groupMap.get(item.batchId)
                                                     : getFallbackGroup(item);
+                                                if (!group) return;
+                                                if (!Array.isArray(group.queued)) group.queued = [];
                                                 group.queued.push(item);
                                             });
 
@@ -24128,6 +24333,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 const group = item.batchId && groupMap.has(item.batchId)
                                                     ? groupMap.get(item.batchId)
                                                     : getFallbackGroup(item);
+                                                if (!group) return;
+                                                if (!Array.isArray(group.running)) group.running = [];
                                                 group.running.push(item);
                                             });
 
@@ -24328,7 +24535,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     <div className="text-[9px] text-zinc-500 mt-0.5">关闭后不再使用本地缓存并隐藏提示条</div>
                                                 </div>
                                                 <button
-                                                    className={`w-10 h-5 rounded-full relative transition-colors ${localCacheEnabled ? 'bg-green-600' : 'bg-zinc-600'}`}
+                                                    className={`w-10 h-5 rounded-full relative transition-colors ${localCacheEnabled ? 'bg-green-600' : theme === 'solarized' ? 'bg-zinc-300' : 'bg-zinc-600'}`}
                                                     onClick={() => setLocalCacheEnabled(prev => !prev)}
                                                 >
                                                     <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${localCacheEnabled ? 'left-6' : 'left-1'}`} />
@@ -24337,7 +24544,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             <div className="flex items-center justify-between">
                                                 <span className="text-[10px] text-zinc-500">PNG 转 JPG（省空间）</span>
                                                 <button
-                                                    className={`w-10 h-5 rounded-full relative transition-colors ${localServerConfig.convertPngToJpg ? 'bg-green-600' : 'bg-zinc-600'} ${!localServerConfig.pilAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    className={`w-10 h-5 rounded-full relative transition-colors ${localServerConfig.convertPngToJpg ? 'bg-green-600' : theme === 'solarized' ? 'bg-zinc-300' : 'bg-zinc-600'} ${!localServerConfig.pilAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                     onClick={() => {
                                                         if (!localServerConfig.pilAvailable) return;
                                                         const nextValue = !localServerConfig.convertPngToJpg;
@@ -24974,6 +25181,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                             onDrop={handleCanvasDrop} onDragOver={handleCanvasDragOver}
                             style={{
                                 backgroundColor: theme === 'dark' ? '#09090b' : (theme === 'solarized' ? '#fdf6e3' : '#f4f4f5'),
+                                backgroundImage: 'radial-gradient(var(--canvas-grid-color) 1px, transparent 1px)',
+                                backgroundSize: '24px 24px',
+                                backgroundPosition: '0 0',
+                                backgroundRepeat: 'repeat',
                                 WebkitFontSmoothing: 'antialiased',
                                 MozOsxFontSmoothing: 'grayscale',
                                 textRendering: 'optimizeLegibility',
@@ -25067,8 +25278,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-zinc-600'
                                                 : 'bg-white text-zinc-800 border-zinc-300 hover:border-zinc-400'}`}
                                         >
-                                            <span className="truncate font-mono">{chatModel}</span>
-                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(chatModel)}`}></div>
+                                            <span className="truncate font-mono">{getModelLabel(chatModel)}</span>
+                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(resolveModelKey(chatModel))}`}></div>
                                             <ChevronDown size={12} className="shrink-0 opacity-50" />
                                         </button>
                                         {chatModelDropdownOpen && (
@@ -25087,8 +25298,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 key={providerKey}
                                                                 onMouseEnter={() => setChatHoveredProvider(providerKey)}
                                                                 className={`w-full text-left px-2 py-1.5 text-[10px] rounded transition-colors ${chatHoveredProvider === providerKey
-                                                                    ? theme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-zinc-100 text-zinc-900'
-                                                                    : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-800'}`}
+                                                                    ? theme === 'dark' ? 'bg-zinc-800 text-white' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-zinc-100 text-zinc-900'
+                                                                    : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : theme === 'solarized' ? 'text-zinc-600 hover:text-zinc-700' : 'text-zinc-600 hover:text-zinc-800'}`}
                                                             >
                                                                 {group.name || providerKey}
                                                             </button>
@@ -25098,22 +25309,26 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <div className="flex-1 pl-1 max-h-64 overflow-y-auto custom-scrollbar">
                                                     {chatHoveredProvider && groupedApiConfigs[chatHoveredProvider]?.models
                                                         .filter(m => m.type === 'Chat')
-                                                        .map((m) => (
-                                                            <button
-                                                                key={m.id}
-                                                                onClick={() => {
-                                                                    setChatModel(m.id);
-                                                                    setChatModelDropdownOpen(false);
-                                                                    setChatHoveredProvider(null);
-                                                                }}
-                                                                className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${chatModel === m.id
-                                                                    ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : 'bg-blue-100 text-blue-700'
-                                                                    : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-zinc-100 text-zinc-700'}`}
-                                                            >
-                                                                <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
-                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(m.id)}`}></div>
-                                                            </button>
-                                                        ))}
+                                                        .map((m) => {
+                                                            const modelKey = m._uid || m.id;
+                                                            const currentModelKey = resolveModelKey(chatModel);
+                                                            return (
+                                                                <button
+                                                                    key={modelKey}
+                                                                    onClick={() => {
+                                                                        setChatModel(modelKey);
+                                                                        setChatModelDropdownOpen(false);
+                                                                        setChatHoveredProvider(null);
+                                                                    }}
+                                                                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-left transition-colors ${currentModelKey === modelKey
+                                                                        ? theme === 'dark' ? 'bg-blue-600/30 text-blue-300' : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800' : 'bg-blue-100 text-blue-700'
+                                                                        : theme === 'dark' ? 'hover:bg-zinc-800 text-zinc-300' : theme === 'solarized' ? 'hover:bg-[#fdf6e3] text-zinc-700' : 'hover:bg-zinc-100 text-zinc-700'}`}
+                                                                >
+                                                                    <span className="text-[10px] font-medium truncate font-mono">{m.id}</span>
+                                                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStatusColor(modelKey)}`}></div>
+                                                                </button>
+                                                            );
+                                                        })}
                                                     {!chatHoveredProvider && (
                                                         <div className={`text-[10px] px-2 py-3 text-center ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
                                                             ← 选择 Provider
@@ -26557,7 +26772,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         ) : (
                                                             <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-800'}`}>{group.name}</span>
                                                         )}
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${theme === 'dark' ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-200 text-zinc-500'}`}>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${theme === 'dark'
+                                                            ? 'bg-zinc-800 text-zinc-500'
+                                                            : theme === 'solarized'
+                                                                ? 'bg-[#eee8d5] text-zinc-600'
+                                                                : 'bg-zinc-200 text-zinc-500'}`}>
                                                             {group.models.length} 模型
                                                         </span>
                                                     </div>
@@ -26700,6 +26919,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 ? (modelLibraryMap.get(api.libraryId)?.displayName || api.libraryId)
                                                                 : '';
                                                             const resolvedApiType = api.apiType || providers[providerKey]?.apiType || 'openai';
+                                                            const statusKey = api._uid || api.id;
                                                             return (
                                                                 <div key={api._uid} className={`flex flex-col gap-2 px-2 py-2 rounded ${theme === 'dark'
                                                                     ? 'bg-zinc-900/50 hover:bg-zinc-800/50'
@@ -26709,7 +26929,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     }`}>
                                                                     <div className="flex items-start justify-between gap-2">
                                                                         <div className="flex flex-wrap items-center gap-2 flex-1">
-                                                                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(api.id)}`}></div>
+                                                                            <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(api._uid)}`}></div>
                                                                             <input
                                                                                 type="text"
                                                                                 value={api.id || ''}
@@ -26777,11 +26997,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 {isEditing ? <Check size={10} /> : <Pencil size={10} />}
                                                                             </button>
                                                                             <button
-                                                                                onClick={() => testApiConnection(api.id)}
-                                                                                disabled={apiTesting === api.id}
-                                                                                className={`px-1.5 py-0.5 rounded text-[9px] ${apiStatus[api.id] === 'success' ? 'text-green-500' : theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
+                                                                                onClick={() => testApiConnection(statusKey)}
+                                                                                disabled={apiTesting === statusKey}
+                                                                                className={`px-1.5 py-0.5 rounded text-[9px] ${apiStatus[statusKey] === 'success' ? 'text-green-500' : theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                                                                             >
-                                                                                {apiTesting === api.id ? <Loader2 size={10} className="animate-spin" /> : apiStatus[api.id] === 'success' ? <CheckCircle2 size={10} /> : <LinkIcon size={10} />}
+                                                                                {apiTesting === statusKey ? <Loader2 size={10} className="animate-spin" /> : apiStatus[statusKey] === 'success' ? <CheckCircle2 size={10} /> : <LinkIcon size={10} />}
                                                                             </button>
                                                                             <button onClick={() => deleteApiConfig(api._uid)} className={`px-1 ${theme === 'dark' ? 'text-zinc-600 hover:text-red-500' : 'text-zinc-400 hover:text-red-500'}`}>
                                                                                 <Trash2 size={10} />
@@ -26871,36 +27091,38 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         : 'bg-white border-zinc-200'
                                                     }`}>
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex items-center gap-2">
+                                                        <div className="flex flex-col gap-1 flex-1">
+                                                            <div className="flex items-center gap-2 w-full">
                                                                 <div className={`text-xs font-medium ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-800'}`}>
                                                                     {entry.displayName || entry.modelName || entry.id}
                                                                 </div>
-                                                                {isEditing ? (
-                                                                    <select
-                                                                        value={entry.type || 'Chat'}
-                                                                        onChange={(e) => updateModelLibraryEntry(entry.id, { type: e.target.value })}
-                                                                        className={`text-[9px] px-1 py-0.5 rounded border outline-none ${theme === 'dark'
-                                                                            ? 'bg-zinc-900 border-zinc-700 text-zinc-300'
-                                                                            : 'bg-white border-zinc-300 text-zinc-700'
-                                                                            }`}
-                                                                        disabled={!isEditing}
-                                                                    >
-                                                                        <option value="Chat">Chat</option>
-                                                                        <option value="Image">Image</option>
-                                                                        <option value="ChatImage">Chat Image</option>
-                                                                        <option value="Video">Video</option>
-                                                                    </select>
-                                                                ) : (
-                                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${theme === 'dark'
-                                                                        ? 'bg-zinc-800 text-zinc-300'
-                                                                        : theme === 'solarized'
-                                                                            ? 'bg-[#eee8d5] text-zinc-600'
-                                                                            : 'bg-zinc-100 text-zinc-600'
-                                                                        }`}>
-                                                                        {entry.type || 'Chat'}
-                                                                    </span>
-                                                                )}
+                                                                <div className="ml-auto flex items-center justify-end">
+                                                                    {isEditing ? (
+                                                                        <select
+                                                                            value={entry.type || 'Chat'}
+                                                                            onChange={(e) => updateModelLibraryEntry(entry.id, { type: e.target.value })}
+                                                                            className={`text-[9px] px-1 py-0.5 rounded border outline-none ${theme === 'dark'
+                                                                                ? 'bg-zinc-900 border-zinc-700 text-zinc-300'
+                                                                                : 'bg-white border-zinc-300 text-zinc-700'
+                                                                                }`}
+                                                                            disabled={!isEditing}
+                                                                        >
+                                                                            <option value="Chat">Chat</option>
+                                                                            <option value="Image">Image</option>
+                                                                            <option value="ChatImage">Chat Image</option>
+                                                                            <option value="Video">Video</option>
+                                                                        </select>
+                                                                    ) : (
+                                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded ${theme === 'dark'
+                                                                            ? 'bg-zinc-800 text-zinc-300'
+                                                                            : theme === 'solarized'
+                                                                                ? 'bg-[#eee8d5] text-zinc-600'
+                                                                                : 'bg-zinc-100 text-zinc-600'
+                                                                            }`}>
+                                                                            {entry.type || 'Chat'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>
                                                                 系统调用模型ID：{entry.modelName || entry.id}

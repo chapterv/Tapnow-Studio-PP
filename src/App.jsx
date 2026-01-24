@@ -574,14 +574,18 @@ const TagListEditor = ({
     allowAll = false,
     allowAllLabel = '',
     onToggleAll = null,
-    normalizeItem = (value) => value
+    normalizeItem = (value) => value,
+    maxItems = Infinity
 }) => {
     const [inputValue, setInputValue] = useState('');
     const list = Array.isArray(values) ? values : [];
     const listDisabled = disabled || inputDisabled;
+    const maxCount = Number.isFinite(maxItems) ? maxItems : Infinity;
+    const isMaxed = list.length >= maxCount;
 
     const addValues = () => {
         if (listDisabled) return;
+        if (isMaxed) return;
         const raw = inputValue.trim();
         if (!raw) return;
         const parts = raw.split(',').map(part => part.trim()).filter(Boolean);
@@ -589,6 +593,7 @@ const TagListEditor = ({
         const next = [...list];
         parts.forEach((part) => {
             const normalized = normalizeItem(part);
+            if (next.length >= maxCount) return;
             if (normalized && !next.includes(normalized)) {
                 next.push(normalized);
             }
@@ -605,7 +610,12 @@ const TagListEditor = ({
     return (
         <div className="space-y-1">
             <div className="flex items-center justify-between">
-                <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{label}</label>
+                <div className="flex items-center gap-2">
+                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{label}</label>
+                    {Number.isFinite(maxCount) && maxCount !== Infinity && (
+                        <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>({list.length}/{maxCount})</span>
+                    )}
+                </div>
                 {allowAllLabel && (
                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                         <input
@@ -661,8 +671,8 @@ const TagListEditor = ({
                 />
                 <button
                     onClick={addValues}
-                    disabled={listDisabled || !inputValue.trim()}
-                    className={`px-2 py-1 rounded text-[10px] ${listDisabled || !inputValue.trim()
+                    disabled={listDisabled || !inputValue.trim() || isMaxed}
+                    className={`px-2 py-1 rounded text-[10px] ${listDisabled || !inputValue.trim() || isMaxed
                         ? theme === 'dark'
                             ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
                             : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
@@ -1821,6 +1831,7 @@ const normalizeVideoResolutionLower = (value) => {
 };
 const isImageModelType = (type) => type === 'Image' || type === 'ChatImage';
 const MAX_CUSTOM_PARAMS = 30;
+const MAX_CUSTOM_PARAM_VALUES = 30;
 const normalizeCustomParamNotes = (notes) => {
     if (!notes || typeof notes !== 'object') return {};
     const next = {};
@@ -1841,12 +1852,17 @@ const normalizeCustomParams = (params) => {
         const values = Array.isArray(param.values)
             ? param.values.map(value => String(value).trim()).filter(Boolean)
             : [];
+        const normalizedNotes = normalizeCustomParamNotes(param.valueNotes || param.valueLabels || param.notes);
+        const notesEnabled = typeof param.notesEnabled === 'boolean'
+            ? param.notesEnabled
+            : Object.keys(normalizedNotes).length > 0;
         return {
             id,
             name,
             values,
             override: !!param.override,
-            valueNotes: normalizeCustomParamNotes(param.valueNotes || param.valueLabels || param.notes)
+            notesEnabled,
+            valueNotes: normalizedNotes
         };
     }).filter(Boolean);
 };
@@ -1860,6 +1876,7 @@ const getCustomParamSelection = (param, selections) => {
 };
 const getCustomParamValueLabel = (param, value) => {
     if (!value) return '';
+    if (!param?.notesEnabled) return value;
     const notes = param?.valueNotes || {};
     const note = notes[value];
     return note ? `${value}(${note})` : value;
@@ -1898,6 +1915,60 @@ const buildCustomParamPreviewPayload = (basePayload, customParams) => {
         }
     });
     return preview;
+};
+const normalizePreviewOverridePatch = (patch) => {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return null;
+    return { ...patch };
+};
+const isPreviewValueEqual = (left, right) => {
+    if (left === right) return true;
+    if (typeof left === 'object' || typeof right === 'object') {
+        try {
+            return JSON.stringify(left) === JSON.stringify(right);
+        } catch (e) {
+            return false;
+        }
+    }
+    return false;
+};
+const buildPreviewOverridePatch = (basePayload, editedPayload) => {
+    if (!basePayload || !editedPayload || typeof editedPayload !== 'object') return null;
+    const patch = {};
+    const baseKeys = new Set(Object.keys(basePayload));
+    Object.keys(editedPayload).forEach((key) => {
+        const editedValue = editedPayload[key];
+        const baseValue = basePayload[key];
+        if (!isPreviewValueEqual(baseValue, editedValue)) {
+            patch[key] = editedValue;
+        }
+        baseKeys.delete(key);
+    });
+    baseKeys.forEach((key) => {
+        patch[key] = null;
+    });
+    return Object.keys(patch).length > 0 ? patch : null;
+};
+const applyPreviewOverridePatch = (payload, patch) => {
+    if (!payload || !patch || typeof patch !== 'object') return payload;
+    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
+    Object.entries(patch).forEach(([key, value]) => {
+        if (!key) return;
+        if (value === null) {
+            if (isFormData) {
+                payload.delete(key);
+            } else {
+                delete payload[key];
+            }
+            return;
+        }
+        if (isFormData) {
+            const nextValue = typeof value === 'string' ? value : JSON.stringify(value);
+            payload.set(key, nextValue);
+            return;
+        }
+        payload[key] = value;
+    });
+    return payload;
 };
 const getModelLibraryPreviewEndpoint = (entry) => {
     if (!entry) return '/v1/images/generations';
@@ -3066,7 +3137,9 @@ function TapnowApp() {
                         videoResolutions: Array.isArray(entry.videoResolutions) ? entry.videoResolutions : null,
                         supportsFirstLastFrame: !!entry.supportsFirstLastFrame,
                         supportsHD: !!entry.supportsHD,
-                        customParams: normalizeCustomParams(entry.customParams)
+                        customParams: normalizeCustomParams(entry.customParams),
+                        previewOverrideEnabled: !!entry.previewOverrideEnabled,
+                        previewOverridePatch: normalizePreviewOverridePatch(entry.previewOverridePatch)
                     })).filter((entry) => entry.id);
                 }
             } catch (e) {
@@ -3592,6 +3665,8 @@ function TapnowApp() {
     const [editingLibraryModels, setEditingLibraryModels] = useState(() => new Set());
     const [collapsedLibraryModels, setCollapsedLibraryModels] = useState(() => new Set());
     const [libraryPreviewModels, setLibraryPreviewModels] = useState(() => new Set());
+    const [libraryPreviewEditing, setLibraryPreviewEditing] = useState(() => new Set());
+    const [libraryPreviewDrafts, setLibraryPreviewDrafts] = useState(() => ({}));
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyCachePanelOpen, setHistoryCachePanelOpen] = useState(false);
     const [historyQueuePanelOpen, setHistoryQueuePanelOpen] = useState(false);
@@ -4076,16 +4151,24 @@ function TapnowApp() {
                 throw new Error(errText || '配置更新失败');
             }
             const data = await res.json();
-            if (data?.config) {
-                setLocalServerConfig(prev => ({
-                    ...prev,
-                    savePath: normalizeLocalPath(data.config.save_path || prev.savePath || ''),
-                    imageSavePath: normalizeLocalPath(data.config.image_save_path || ''),
-                    videoSavePath: normalizeLocalPath(data.config.video_save_path || ''),
-                    convertPngToJpg: data.config.convert_png_to_jpg !== false,
-                    jpgQuality: data.config.jpg_quality || prev.jpgQuality
-                }));
-            }
+            const serverConfig = data?.config || {};
+            setLocalServerConfig(prev => ({
+                ...prev,
+                savePath: normalizeLocalPath(
+                    serverConfig.save_path ?? normalizedPatch.save_path ?? prev.savePath ?? ''
+                ),
+                imageSavePath: normalizeLocalPath(
+                    serverConfig.image_save_path ?? normalizedPatch.image_save_path ?? prev.imageSavePath ?? ''
+                ),
+                videoSavePath: normalizeLocalPath(
+                    serverConfig.video_save_path ?? normalizedPatch.video_save_path ?? prev.videoSavePath ?? ''
+                ),
+                convertPngToJpg: (serverConfig.convert_png_to_jpg ?? normalizedPatch.convert_png_to_jpg) !== undefined
+                    ? (serverConfig.convert_png_to_jpg ?? normalizedPatch.convert_png_to_jpg) !== false
+                    : prev.convertPngToJpg,
+                jpgQuality: serverConfig.jpg_quality ?? normalizedPatch.jpg_quality ?? prev.jpgQuality,
+                pilAvailable: serverConfig.pil_available ?? prev.pilAvailable
+            }));
             if (!silent) showToast(data?.message || '本地缓存配置已更新', 'success', 2000);
             return true;
         } catch (err) {
@@ -4934,7 +5017,9 @@ function TapnowApp() {
                 videoResolutions: Array.isArray(entry.videoResolutions) ? entry.videoResolutions : null,
                 supportsFirstLastFrame: !!entry.supportsFirstLastFrame,
                 supportsHD: !!entry.supportsHD,
-                customParams: normalizeCustomParams(entry.customParams)
+                customParams: normalizeCustomParams(entry.customParams),
+                previewOverrideEnabled: !!entry.previewOverrideEnabled,
+                previewOverridePatch: normalizePreviewOverridePatch(entry.previewOverridePatch)
             });
         });
         return map;
@@ -4958,7 +5043,9 @@ function TapnowApp() {
             videoResolutions: resolvedLibrary ? resolvedLibrary.videoResolutions : (config.videoResolutions || null),
             supportsFirstLastFrame: resolvedLibrary ? !!resolvedLibrary.supportsFirstLastFrame : !!config.supportsFirstLastFrame,
             supportsHD: resolvedLibrary ? !!resolvedLibrary.supportsHD : !!config.supportsHD,
-            customParams: resolvedLibrary ? normalizeCustomParams(resolvedLibrary.customParams) : normalizeCustomParams(config.customParams)
+            customParams: resolvedLibrary ? normalizeCustomParams(resolvedLibrary.customParams) : normalizeCustomParams(config.customParams),
+            previewOverrideEnabled: resolvedLibrary ? !!resolvedLibrary.previewOverrideEnabled : !!config.previewOverrideEnabled,
+            previewOverridePatch: normalizePreviewOverridePatch(resolvedLibrary?.previewOverridePatch || config.previewOverridePatch)
         };
     }, [modelLibraryMap]);
 
@@ -6918,7 +7005,9 @@ function TapnowApp() {
             supportsFirstLastFrame: false,
             supportsHD: false,
             apiType: 'openai',
-            customParams: []
+            customParams: [],
+            previewOverrideEnabled: false,
+            previewOverridePatch: null
         };
         setModelLibrary(prev => [...prev, newEntry]);
         setEditingLibraryModels(prev => {
@@ -6947,6 +7036,7 @@ function TapnowApp() {
                 name: '',
                 values: [],
                 override: false,
+                notesEnabled: false,
                 valueNotes: {}
             });
             return { ...entry, customParams: nextParams };
@@ -6999,6 +7089,17 @@ function TapnowApp() {
             next.delete(id);
             return next;
         });
+        setLibraryPreviewEditing(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        setLibraryPreviewDrafts(prev => {
+            if (!prev[id]) return prev;
+            const { [id]: _removed, ...rest } = prev;
+            return rest;
+        });
     };
 
     const setApiModelEditing = useCallback((uid, enabled) => {
@@ -7042,9 +7143,23 @@ function TapnowApp() {
         if (!id) return;
         setLibraryPreviewModels(prev => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
             return next;
+        });
+        setLibraryPreviewEditing(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        setLibraryPreviewDrafts(prev => {
+            if (!prev[id]) return prev;
+            const { [id]: _removed, ...rest } = prev;
+            return rest;
         });
     }, []);
 
@@ -10726,6 +10841,9 @@ function TapnowApp() {
                 }
 
                 payload = applyCustomParamsToPayload(payload, customParams, customParamSelections);
+                if (config?.previewOverrideEnabled && config.previewOverridePatch) {
+                    payload = applyPreviewOverridePatch(payload, config.previewOverridePatch);
+                }
 
                 // --- 发送请求逻辑 (通用) (Supports Failover) ---
                 // --- 发送请求逻辑 (通用) (Supports Failover) ---
@@ -11184,7 +11302,13 @@ function TapnowApp() {
                 // V3.4.20: Explicitly define config for video generation block
                 const config = getApiConfigByKey(modelId);
                 const customParams = Array.isArray(config?.customParams) ? config.customParams : [];
-                const applyVideoCustomParams = (payload) => applyCustomParamsToPayload(payload, customParams, customParamSelections);
+                const applyVideoCustomParams = (payload) => {
+                    const updated = applyCustomParamsToPayload(payload, customParams, customParamSelections);
+                    if (config?.previewOverrideEnabled && config.previewOverridePatch) {
+                        applyPreviewOverridePatch(updated, config.previewOverridePatch);
+                    }
+                    return updated;
+                };
                 // Veo 3.x 图生视频：按 /v2/videos/generations 规范发送 JSON，使用 images 数组而不是 input_image
                 if (modelId.includes('veo')) {
                     const endpoint = `${baseUrl} /v2/videos / generations`;
@@ -26800,7 +26924,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             videoResolutions: Array.isArray(entry.videoResolutions) ? entry.videoResolutions : null,
                                                                             supportsFirstLastFrame: !!entry.supportsFirstLastFrame,
                                                                             supportsHD: !!entry.supportsHD,
-                                                                            customParams: normalizeCustomParams(entry.customParams)
+                                                                            customParams: normalizeCustomParams(entry.customParams),
+                                                                            previewOverrideEnabled: !!entry.previewOverrideEnabled,
+                                                                            previewOverridePatch: normalizePreviewOverridePatch(entry.previewOverridePatch)
                                                                         }))
                                                                         .filter((entry) => entry.id);
                                                                     setModelLibrary(normalizedLibrary);
@@ -27331,9 +27457,15 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 previewBase.duration = durationValues[0] || '5s';
                                                 previewBase.resolution = videoResolutionValues[0] || '720P';
                                             }
-                                            const previewPayload = buildCustomParamPreviewPayload(previewBase, customParams);
+                                            const previewPayloadBase = buildCustomParamPreviewPayload(previewBase, customParams);
+                                            const previewOverridePatch = normalizePreviewOverridePatch(entry.previewOverridePatch);
+                                            const previewPayload = entry.previewOverrideEnabled && previewOverridePatch
+                                                ? applyPreviewOverridePatch({ ...previewPayloadBase }, previewOverridePatch)
+                                                : previewPayloadBase;
                                             const previewEndpoint = getModelLibraryPreviewEndpoint(entry);
                                             const previewPython = buildPythonPreviewSnippet(previewEndpoint, previewPayload);
+                                            const isPreviewEditing = libraryPreviewEditing.has(entry.id);
+                                            const previewDraft = libraryPreviewDrafts[entry.id] || '';
                                             return (
                                                 <div key={entry.id} className={`rounded-lg border p-3 space-y-3 ${theme === 'dark'
                                                     ? 'bg-[#18181b] border-zinc-800'
@@ -27568,6 +27700,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 {(() => {
                                                                                     const paramValues = Array.isArray(param.values) ? param.values : [];
                                                                                     const paramNotes = param.valueNotes || {};
+                                                                                    const notesEnabled = !!param.notesEnabled;
                                                                                     return (
                                                                                         <>
                                                                                 <div className="flex items-center gap-2">
@@ -27613,11 +27746,23 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     disabled={!isEditing}
                                                                                     theme={theme}
                                                                                     formatItem={(value) => getCustomParamValueLabel(param, value)}
+                                                                                    maxItems={MAX_CUSTOM_PARAM_VALUES}
                                                                                 />
                                                                                 {paramValues.length > 0 && (
                                                                                     <div className="space-y-1">
-                                                                                        <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>参数备注</div>
-                                                                                        {paramValues.map((value) => (
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>参数备注</div>
+                                                                                            <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                                                                                                <input
+                                                                                                    type="checkbox"
+                                                                                                    checked={notesEnabled}
+                                                                                                    onChange={(e) => updateModelLibraryCustomParam(entry.id, param.id, { notesEnabled: e.target.checked })}
+                                                                                                    disabled={!isEditing}
+                                                                                                />
+                                                                                                <span>启用备注</span>
+                                                                                            </label>
+                                                                                        </div>
+                                                                                        {notesEnabled && paramValues.map((value) => (
                                                                                             <div key={value} className="flex items-center gap-2">
                                                                                                 <span className={`text-[9px] w-24 truncate ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`} title={value}>{value}</span>
                                                                                                 <input
@@ -27658,11 +27803,116 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     ? 'bg-zinc-950/60 border-zinc-800'
                                                                     : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5]' : 'bg-zinc-50 border-zinc-200'
                                                                     }`}>
-                                                                    <div className={`text-[9px] mb-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求预览（JSON）</div>
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求预览（JSON）</div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={!!entry.previewOverrideEnabled}
+                                                                                    onChange={(e) => updateModelLibraryEntry(entry.id, { previewOverrideEnabled: e.target.checked })}
+                                                                                />
+                                                                                <span>修改覆盖</span>
+                                                                            </label>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (isPreviewEditing) {
+                                                                                        setLibraryPreviewEditing(prev => {
+                                                                                            const next = new Set(prev);
+                                                                                            next.delete(entry.id);
+                                                                                            return next;
+                                                                                        });
+                                                                                        setLibraryPreviewDrafts(prev => {
+                                                                                            const { [entry.id]: _removed, ...rest } = prev;
+                                                                                            return rest;
+                                                                                        });
+                                                                                    } else {
+                                                                                        setLibraryPreviewEditing(prev => {
+                                                                                            const next = new Set(prev);
+                                                                                            next.add(entry.id);
+                                                                                            return next;
+                                                                                        });
+                                                                                        setLibraryPreviewDrafts(prev => ({
+                                                                                            ...prev,
+                                                                                            [entry.id]: JSON.stringify(previewPayload, null, 2)
+                                                                                        }));
+                                                                                    }
+                                                                                }}
+                                                                                className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
+                                                                                title={isPreviewEditing ? '取消编辑' : '编辑预览'}
+                                                                            >
+                                                                                <Edit3 size={12} className={isPreviewEditing ? 'text-blue-500' : ''} />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
                                                                     <div className={`text-[9px] mb-1 ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>Endpoint: {previewEndpoint}</div>
-                                                                    <pre className={`text-[9px] whitespace-pre-wrap ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                                                                        {JSON.stringify(previewPayload, null, 2)}
-                                                                    </pre>
+                                                                    {isPreviewEditing ? (
+                                                                        <div className="space-y-2">
+                                                                            <textarea
+                                                                                value={previewDraft}
+                                                                                onChange={(e) => setLibraryPreviewDrafts(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                                                                                className={`w-full h-40 text-[9px] rounded px-2 py-1 border outline-none ${theme === 'dark'
+                                                                                    ? 'bg-zinc-900 border-zinc-800 text-zinc-200'
+                                                                                    : 'bg-white border-zinc-300 text-zinc-800'
+                                                                                    }`}
+                                                                            />
+                                                                            <div className="flex items-center justify-end gap-2">
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        try {
+                                                                                            const parsed = previewDraft ? JSON.parse(previewDraft) : {};
+                                                                                            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                                                                                                throw new Error('预览 JSON 必须是对象');
+                                                                                            }
+                                                                                            const patch = buildPreviewOverridePatch(previewPayloadBase, parsed);
+                                                                                            updateModelLibraryEntry(entry.id, { previewOverridePatch: patch });
+                                                                                            setLibraryPreviewEditing(prev => {
+                                                                                                const next = new Set(prev);
+                                                                                                next.delete(entry.id);
+                                                                                                return next;
+                                                                                            });
+                                                                                            setLibraryPreviewDrafts(prev => {
+                                                                                                const { [entry.id]: _removed, ...rest } = prev;
+                                                                                                return rest;
+                                                                                            });
+                                                                                            showToast('预览参数已更新', 'success', 2000);
+                                                                                        } catch (e) {
+                                                                                            showToast('JSON 格式无效，请检查后再保存', 'error', 2000);
+                                                                                        }
+                                                                                    }}
+                                                                                    className={`px-2 py-1 rounded text-[9px] ${theme === 'dark'
+                                                                                        ? 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'
+                                                                                        : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300'
+                                                                                        }`}
+                                                                                >
+                                                                                    保存
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        setLibraryPreviewEditing(prev => {
+                                                                                            const next = new Set(prev);
+                                                                                            next.delete(entry.id);
+                                                                                            return next;
+                                                                                        });
+                                                                                        setLibraryPreviewDrafts(prev => {
+                                                                                            const { [entry.id]: _removed, ...rest } = prev;
+                                                                                            return rest;
+                                                                                        });
+                                                                                    }}
+                                                                                    className={`px-2 py-1 rounded text-[9px] ${theme === 'dark'
+                                                                                        ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                                                                        : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+                                                                                        }`}
+                                                                                >
+                                                                                    取消
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <pre className={`text-[9px] whitespace-pre-wrap ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                                                                            {JSON.stringify(previewPayload, null, 2)}
+                                                                        </pre>
+                                                                    )}
                                                                     <div className={`text-[9px] mt-2 mb-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>Python 示例</div>
                                                                     <pre className={`text-[9px] whitespace-pre-wrap ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
                                                                         {previewPython}

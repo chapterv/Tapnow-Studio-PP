@@ -4835,9 +4835,9 @@ function TapnowApp() {
                     ));
                 }
             }
+            console.info('[Cache] image cache summary', summary);
         };
 
-        console.info('[Cache] image cache summary', summary);
         const timer = setTimeout(cacheHistoryImages, 3000);
         return () => clearTimeout(timer);
     }, [history, localCacheActive, localServerConfig.imageSavePath, localServerConfig.videoSavePath, saveImageToLocalCache, sanitizeCacheId, getCacheIdFromUrl, getItemProxyPreference, getProxyPreferenceForUrl, cacheRefreshTick]);

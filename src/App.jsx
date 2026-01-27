@@ -1843,6 +1843,16 @@ const normalizeCustomParamNotes = (notes) => {
     return next;
 };
 const normalizeValueNotes = (notes) => normalizeCustomParamNotes(notes);
+const normalizeResolutionNotes = (notes) => {
+    if (!notes || typeof notes !== 'object') return {};
+    const next = {};
+    Object.entries(notes).forEach(([value, note]) => {
+        const key = normalizeResolutionOption(value);
+        const text = typeof note === 'string' ? note.trim() : '';
+        if (key && text) next[key] = text;
+    });
+    return next;
+};
 const normalizeCustomParams = (params) => {
     if (!Array.isArray(params)) return [];
     return params.map((param, index) => {
@@ -4071,7 +4081,7 @@ function TapnowApp() {
 
             let content = imageUrl;
             if (!imageUrl.startsWith('data:')) {
-                if (shouldSkipCacheFetch(imageUrl)) return null;
+                if (!useProxy && shouldSkipCacheFetch(imageUrl)) return null;
                 const { blob } = await fetchCacheSource(imageUrl, { useProxy });
                 content = await new Promise((resolve) => {
                     const reader = new FileReader();
@@ -4095,7 +4105,7 @@ function TapnowApp() {
                 }
             }
         } catch (e) {
-            if (imageUrl && !imageUrl.startsWith('data:')) {
+            if (imageUrl && !imageUrl.startsWith('data:') && !useProxy) {
                 recordCacheFetchFailure(imageUrl);
             }
             console.warn('[缓存] 保存图片缓存失败:', e);
@@ -4111,7 +4121,7 @@ function TapnowApp() {
         try {
             const saveId = getCacheIdFromUrl(videoUrl, itemId);
 
-            if (shouldSkipCacheFetch(videoUrl)) return null;
+            if (!useProxy && shouldSkipCacheFetch(videoUrl)) return null;
             const { blob } = await fetchCacheSource(videoUrl, { useProxy });
             const content = await new Promise((resolve) => {
                 const reader = new FileReader();
@@ -4132,7 +4142,9 @@ function TapnowApp() {
                 }
             }
         } catch (e) {
-            recordCacheFetchFailure(videoUrl);
+            if (!useProxy) {
+                recordCacheFetchFailure(videoUrl);
+            }
             console.warn('[缓存] 保存视频缓存失败:', e);
         }
         return null;
@@ -4229,6 +4241,37 @@ function TapnowApp() {
         if (normalizedKey && providers[normalizedKey]?.useProxy) return true;
         return false;
     }, [providers]);
+
+    const historyUrlProxyMap = useMemo(() => {
+        const map = new Map();
+        history.forEach((item) => {
+            if (!item) return;
+            const useProxy = getItemProxyPreference(item);
+            const urls = [
+                item.url,
+                item.originalUrl,
+                item.mjOriginalUrl,
+                ...(Array.isArray(item.mjImages) ? item.mjImages : []),
+                ...(Array.isArray(item.output_images) ? item.output_images : [])
+            ].filter(Boolean);
+            urls.forEach((url) => {
+                if (typeof url !== 'string') return;
+                if (!/^https?:/i.test(url)) return;
+                map.set(url, useProxy);
+            });
+        });
+        return map;
+    }, [history, getItemProxyPreference]);
+
+    const getProxyPreferenceForUrl = useCallback((url, fallback = false) => {
+        if (!url) return !!fallback;
+        const raw = String(url);
+        if (raw.startsWith('data:') || raw.startsWith('blob:')) return false;
+        const base = (localServerUrl || '').trim();
+        if (base && raw.startsWith(base)) return false;
+        if (historyUrlProxyMap.has(raw)) return !!historyUrlProxyMap.get(raw);
+        return !!fallback;
+    }, [historyUrlProxyMap, localServerUrl]);
 
     useEffect(() => {
         const nextPath = {
@@ -5047,7 +5090,7 @@ function TapnowApp() {
                 ratioNotes: normalizeValueNotes(entry.ratioNotes),
                 ratioNotesEnabled: !!entry.ratioNotesEnabled,
                 resolutionLimits: Array.isArray(entry.resolutionLimits) ? entry.resolutionLimits : null,
-                resolutionNotes: normalizeValueNotes(entry.resolutionNotes),
+                resolutionNotes: normalizeResolutionNotes(entry.resolutionNotes),
                 resolutionNotesEnabled: !!entry.resolutionNotesEnabled,
                 durations: Array.isArray(entry.durations) ? entry.durations : null,
                 durationNotes: normalizeValueNotes(entry.durationNotes),
@@ -5081,7 +5124,7 @@ function TapnowApp() {
             ratioNotes: resolvedLibrary ? normalizeValueNotes(resolvedLibrary.ratioNotes) : normalizeValueNotes(config.ratioNotes),
             ratioNotesEnabled: resolvedLibrary ? !!resolvedLibrary.ratioNotesEnabled : !!config.ratioNotesEnabled,
             resolutionLimits: resolvedLibrary ? resolvedLibrary.resolutionLimits : (config.resolutionLimits || null),
-            resolutionNotes: resolvedLibrary ? normalizeValueNotes(resolvedLibrary.resolutionNotes) : normalizeValueNotes(config.resolutionNotes),
+            resolutionNotes: resolvedLibrary ? normalizeResolutionNotes(resolvedLibrary.resolutionNotes) : normalizeResolutionNotes(config.resolutionNotes),
             resolutionNotesEnabled: resolvedLibrary ? !!resolvedLibrary.resolutionNotesEnabled : !!config.resolutionNotesEnabled,
             durations: resolvedLibrary ? resolvedLibrary.durations : (config.durations || null),
             durationNotes: resolvedLibrary ? normalizeValueNotes(resolvedLibrary.durationNotes) : normalizeValueNotes(config.durationNotes),
@@ -5679,7 +5722,8 @@ function TapnowApp() {
             seenUrls.add(url);
             try {
                 let content = url;
-                const useProxy = typeof useProxyResolver === 'function' ? !!useProxyResolver(item) : false;
+                const baseProxy = typeof useProxyResolver === 'function' ? !!useProxyResolver(item) : false;
+                const useProxy = getProxyPreferenceForUrl(url, baseProxy);
                 if (!url.startsWith('data:')) {
                     const { blob } = await fetchCacheSource(url, { useProxy });
                     content = await new Promise((resolve) => {
@@ -5714,7 +5758,7 @@ function TapnowApp() {
             }
         }
         return files;
-    }, [fetchCacheSource, getDataUrlExt, getFilenameFromUrl, sanitizeCacheId, projectName]);
+    }, [fetchCacheSource, getDataUrlExt, getFilenameFromUrl, sanitizeCacheId, projectName, getProxyPreferenceForUrl]);
 
     const getLocalSaveBaseUrl = useCallback((node) => {
         const raw = (node?.settings?.serverUrl || localServerUrl || '').trim();
@@ -7845,7 +7889,8 @@ function TapnowApp() {
                     } else {
                         // 如果是HTTP URL，需要先转换为data URL再处理
                         try {
-                            const blob = await getBlobFromUrl(imageUrl);
+                            const useProxy = getProxyPreferenceForUrl(imageUrl, false);
+                            const blob = await getBlobFromUrl(imageUrl, { useProxy });
                             const dataUrl = await blobToDataURL(blob);
                             const processed = await prepareImageForMidjourneyUpload(dataUrl, 2048, 8);
                             return processed;
@@ -10542,6 +10587,7 @@ function TapnowApp() {
                 const isGeminiNative = apiType === 'gemini';
                 const isChatImage = config?.type === 'ChatImage';
                 const useAsync = isModelScope ? forceAsync : false;
+                const resolveSourceProxy = (url) => getProxyPreferenceForUrl(url, useProxy);
 
                 // --- 模型特征定义 (融合 V2.5-3 和 V2.5-4) ---
                 // isBananaLike: 用于旧版/通用香蕉模型 (排除 nano-banana-2)
@@ -10636,7 +10682,7 @@ function TapnowApp() {
                     };
 
                     for (const img of inputImages) {
-                        const base64 = await getBase64FromUrl(img, { useProxy });
+                        const base64 = await getBase64FromUrl(img, { useProxy: resolveSourceProxy(img) });
                         const mimeType = getGeminiMimeType(img);
                         parts.push({
                             inline_data: {
@@ -10673,7 +10719,7 @@ function TapnowApp() {
                     if (aspect) formData.append('aspect_ratio', aspect);
                     if (imageSizeFlag) formData.append('image_size', imageSizeFlag);
 
-                    const blobPromises = connectedImages.map(url => getBlobFromUrl(url, { useProxy }));
+                    const blobPromises = connectedImages.map(url => getBlobFromUrl(url, { useProxy: resolveSourceProxy(url) }));
                     const blobs = await Promise.all(blobPromises);
                     blobs.forEach((blob, i) => {
                         formData.append('image', blob, `input_${i}.png`);
@@ -10698,7 +10744,7 @@ function TapnowApp() {
 
                     const refs = connectedImages.length > 0 ? connectedImages : (sourceImage ? [sourceImage] : []);
                     if (refs.length > 0) {
-                        const blobPromises = refs.map(url => getBlobFromUrl(url, { useProxy }));
+                        const blobPromises = refs.map(url => getBlobFromUrl(url, { useProxy: resolveSourceProxy(url) }));
                         const blobs = await Promise.all(blobPromises);
                         blobs.forEach((blob, i) => formData.append('image', blob, `flux_ref_${i}.png`));
                     }
@@ -10720,7 +10766,7 @@ function TapnowApp() {
                     if (aspect) jsonBody.aspect_ratio = aspect;
 
                     if (connectedImages.length > 0) {
-                        const b64Promises = connectedImages.map(url => getBase64FromUrl(url, { useProxy }));
+                        const b64Promises = connectedImages.map(url => getBase64FromUrl(url, { useProxy: resolveSourceProxy(url) }));
                         const b64s = await Promise.all(b64Promises);
                         jsonBody.image = b64s.map(b => `data:image/png;base64,${b}`);
                     }
@@ -10739,7 +10785,7 @@ function TapnowApp() {
                         if (aspect) formData.append('aspect_ratio', aspect);
                         if (imageSizeFlag) formData.append('image_size', imageSizeFlag);
 
-                        const blobPromises = connectedImages.map(url => getBlobFromUrl(url, { useProxy }));
+                        const blobPromises = connectedImages.map(url => getBlobFromUrl(url, { useProxy: resolveSourceProxy(url) }));
                         const blobs = await Promise.all(blobPromises);
                         blobs.forEach((blob, i) => {
                             formData.append('image', blob, `input_${i}.png`);
@@ -10764,7 +10810,7 @@ function TapnowApp() {
                             } else if (trimmedImg.startsWith('data:')) {
                                 jsonBody.image = [trimmedImg];
                             } else {
-                                const b64 = await getBase64FromUrl(trimmedImg, { useProxy });
+                                const b64 = await getBase64FromUrl(trimmedImg, { useProxy: resolveSourceProxy(trimmedImg) });
                                 jsonBody.image = [`data:image/png;base64,${b64}`];
                             }
                         }
@@ -10910,7 +10956,7 @@ function TapnowApp() {
                         const maskDataUrl = finalMaskBlob ? await blobToDataURL(finalMaskBlob) : null;
                         const imagePromises = connectedImages.map(async (imgUrl) => {
                             try {
-                                return await getDataUrlFromUrl(imgUrl);
+                                return await getDataUrlFromUrl(imgUrl, { useProxy: resolveSourceProxy(imgUrl) });
                             } catch (e) {
                                 if (imgUrl.startsWith('blob:')) {
                                     console.error('[Jimeng] Blob URL 恢复失败:', e);
@@ -11426,6 +11472,8 @@ function TapnowApp() {
                 // V3.4.20: Explicitly define config for video generation block
                 const config = getApiConfigByKey(modelId);
                 const customParams = Array.isArray(config?.customParams) ? config.customParams : [];
+                const useProxy = !!credentials.useProxy;
+                const resolveSourceProxy = (url) => getProxyPreferenceForUrl(url, useProxy);
                 const applyVideoCustomParams = (payload) => {
                     const updated = applyCustomParamsToPayload(payload, customParams, customParamSelections);
                     if (config?.previewOverrideEnabled && config.previewOverridePatch) {
@@ -11485,12 +11533,12 @@ function TapnowApp() {
                                     if (trimmedImg.startsWith('data:')) {
                                         return trimmedImg;
                                     } else if (trimmedImg.startsWith('blob:')) {
-                                        const base64 = await getBase64FromUrl(trimmedImg, { useProxy });
+                                        const base64 = await getBase64FromUrl(trimmedImg, { useProxy: resolveSourceProxy(trimmedImg) });
                                         return `data:image/png;base64, ${base64} `;
                                     } else if (trimmedImg.length > 100 && !trimmedImg.includes('://') && !trimmedImg.startsWith('data:')) {
                                         return `data:image/png;base64, ${trimmedImg} `;
                                     } else {
-                                        const base64 = await getBase64FromUrl(trimmedImg, { useProxy });
+                                        const base64 = await getBase64FromUrl(trimmedImg, { useProxy: resolveSourceProxy(trimmedImg) });
                                         return `data:image/png;base64, ${base64} `;
                                     }
                                 } catch (e) {
@@ -11517,13 +11565,13 @@ function TapnowApp() {
                                 } else if (trimmedSource.startsWith('data:')) {
                                     images = [trimmedSource];
                                 } else if (trimmedSource.startsWith('blob:')) {
-                                    const base64 = await getBase64FromUrl(trimmedSource, { useProxy });
+                                    const base64 = await getBase64FromUrl(trimmedSource, { useProxy: resolveSourceProxy(trimmedSource) });
                                     images = [`data:image/png;base64, ${base64} `];
                                 } else {
                                     if (trimmedSource.length > 100 && !trimmedSource.includes('://') && !trimmedSource.startsWith('data:')) {
                                         images = [`data:image/png;base64, ${trimmedSource} `];
                                     } else {
-                                        const base64 = await getBase64FromUrl(trimmedSource, { useProxy });
+                                        const base64 = await getBase64FromUrl(trimmedSource, { useProxy: resolveSourceProxy(trimmedSource) });
                                         images = [`data:image/png;base64, ${base64} `];
                                     }
                                 }
@@ -11680,7 +11728,7 @@ function TapnowApp() {
                                 base64Data = sourceImage; // 已经是 Base64
                             } else {
                                 // 下载 blob 或 url 并转换
-                                const blob = await getBlobFromUrl(sourceImage, { useProxy });
+                                const blob = await getBlobFromUrl(sourceImage, { useProxy: resolveSourceProxy(sourceImage) });
                                 base64Data = await new Promise((resolve, reject) => {
                                     const reader = new FileReader();
                                     reader.onloadend = () => resolve(reader.result);
@@ -11742,7 +11790,7 @@ function TapnowApp() {
                 // Generic Video Logic (Sora/Kling/etc) - Force Multipart for Image Input with correct field names
                 if (sourceImage) {
                     const formData = new FormData();
-                    const blob = await getBlobFromUrl(sourceImage, { useProxy });
+                    const blob = await getBlobFromUrl(sourceImage, { useProxy: resolveSourceProxy(sourceImage) });
 
                     if (modelId.includes('sora')) {
                         endpoint = `${baseUrl} /v1/videos`;
@@ -11772,7 +11820,7 @@ function TapnowApp() {
                         const jimengResolution = normalizeVideoResolutionLower(resolution);
                         if (jimengResolution) formData.append('resolution', jimengResolution);
                         const jimengImages = connectedImages.filter(Boolean).slice(0, 2);
-                        const jimengBlobs = await Promise.all(jimengImages.map((img) => getBlobFromUrl(img, { useProxy })));
+                        const jimengBlobs = await Promise.all(jimengImages.map((img) => getBlobFromUrl(img, { useProxy: resolveSourceProxy(img) })));
                         if (jimengBlobs[0]) formData.append('image_file_1', jimengBlobs[0], 'first.png');
                         if (jimengBlobs[1]) formData.append('image_file_2', jimengBlobs[1], 'last.png');
                     } else if (modelId.includes('grok')) {
@@ -11999,10 +12047,11 @@ function TapnowApp() {
         });
     };
 
-    const getDataUrlFromUrl = async (url) => {
+    const getDataUrlFromUrl = async (url, options = {}) => {
         if (!url) return url;
         if (url.startsWith('data:')) return url;
-        const blob = await getBlobFromUrl(url);
+        const useProxy = getProxyPreferenceForUrl(url, options.useProxy === true);
+        const blob = await getBlobFromUrl(url, { useProxy });
         return await blobToDataURL(blob);
     };
 
@@ -12958,7 +13007,7 @@ function TapnowApp() {
                                 ratioNotes: normalizeValueNotes(entry.ratioNotes),
                                 ratioNotesEnabled: !!entry.ratioNotesEnabled,
                                 resolutionLimits: Array.isArray(entry.resolutionLimits) ? entry.resolutionLimits : null,
-                                resolutionNotes: normalizeValueNotes(entry.resolutionNotes),
+                                resolutionNotes: normalizeResolutionNotes(entry.resolutionNotes),
                                 resolutionNotesEnabled: !!entry.resolutionNotesEnabled,
                                 durations: Array.isArray(entry.durations) ? entry.durations : null,
                                 durationNotes: normalizeValueNotes(entry.durationNotes),
@@ -26470,6 +26519,36 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             a.download = filename;
                                             a.click();
                                             window.URL.revokeObjectURL(blobUrl);
+
+                                            if (localCacheActive && resolvedUrl && !resolvedUrl.startsWith('data:') && !resolvedUrl.startsWith('blob:')) {
+                                                try {
+                                                    if (isVideo) {
+                                                        const result = await saveVideoToLocalCache(item.id, resolvedUrl, 'history', { useProxy });
+                                                        if (result?.url) {
+                                                            setHistory(prev => prev.map(h => h.id === item.id ? { ...h, localCacheUrl: result.url, localFilePath: result.path } : h));
+                                                        }
+                                                    } else {
+                                                        const cacheId = getCacheIdFromUrl(resolvedUrl, item.id);
+                                                        const result = await saveImageToLocalCache(cacheId, resolvedUrl, 'history', { forceId: true, useProxy });
+                                                        if (result?.url) {
+                                                            cachedHistoryUrlRef.current.set(resolvedUrl, result.url);
+                                                            setHistory(prev => prev.map(h => {
+                                                                if (h.id !== item.id) return h;
+                                                                const nextMap = h.localCacheMap ? { ...h.localCacheMap } : {};
+                                                                nextMap[resolvedUrl] = result.url;
+                                                                return {
+                                                                    ...h,
+                                                                    localCacheUrl: h.localCacheUrl || result.url,
+                                                                    localFilePath: h.localFilePath || result.path,
+                                                                    localCacheMap: nextMap
+                                                                };
+                                                            }));
+                                                        }
+                                                    }
+                                                } catch (cacheErr) {
+                                                    console.warn('[下载] 写入本地缓存失败:', cacheErr);
+                                                }
+                                            }
                                         } catch (err) {
                                             console.error('下载失败:', err);
                                             alert('下载失败，请重试');
@@ -27616,7 +27695,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             const ratioNotes = entry.ratioNotes || {};
                                             const ratioNotesEnabled = !!entry.ratioNotesEnabled;
                                             const resolutionValues = Array.isArray(entry.resolutionLimits) ? entry.resolutionLimits : [];
-                                            const resolutionNotes = entry.resolutionNotes || {};
+                                            const resolutionNotes = normalizeResolutionNotes(entry.resolutionNotes);
                                             const resolutionNotesEnabled = !!entry.resolutionNotesEnabled;
                                             const durationValues = Array.isArray(entry.durations) ? entry.durations : [];
                                             const durationNotes = entry.durationNotes || {};
@@ -27848,7 +27927,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             placeholder="例：1K,2K,4K"
                                                                             disabled={!isEditing}
                                                                             theme={theme}
-                                                                            normalizeItem={(value) => String(value).toUpperCase()}
+                                                                            normalizeItem={(value) => normalizeResolutionOption(value)}
                                                                             formatItem={(value) => getValueLabelWithNotes(value, resolutionNotesEnabled, resolutionNotes)}
                                                                         />
                                                                         {resolutionValues.length > 0 && (

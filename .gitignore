@@ -8,8 +8,8 @@ scripts/
 kanban.json
 codex.md
 *.7z
-!JimengAPI_For_Mac_Users_260117_v1.8.1.7z
-!JimengAPI_Release_Green_260117_v1.8.1.7z
+!JimengAPI_For_Mac_Users_260127_v1.8.4.7z
+!JimengAPI_Release_Green_260127_v1.8.4.7z
 *.zip
 *.exe
 .DS_Store

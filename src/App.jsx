@@ -3931,57 +3931,6 @@ function TapnowApp() {
         return `cache_${hashed}`;
     }, [getFilenameFromUrl, sanitizeCacheId, hashString]);
 
-    const generateThumbnail = useCallback(async (imageUrl, quality = 'normal', options = {}) => {
-        const config = quality === 'ultra'
-            ? { maxSize: 80, jpegQuality: 0.3 }
-            : { maxSize: 150, jpegQuality: 0.6 };
-        let resolvedUrl = imageUrl;
-        if (!resolvedUrl) return null;
-        try {
-            if (LocalImageManager.isImageId(resolvedUrl)) {
-                resolvedUrl = await LocalImageManager.getImage(resolvedUrl);
-            }
-        } catch (e) {
-            return null;
-        }
-        if (!resolvedUrl) return null;
-        try {
-            const blob = await getBlobFromUrl(resolvedUrl, {
-                useProxy: options.useProxy,
-                preferLocal: options.preferLocal
-            });
-            if (!blob) return null;
-            const blobUrl = URL.createObjectURL(blob);
-            return await new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let w = img.naturalWidth;
-                    let h = img.naturalHeight;
-                    if (w > h) {
-                        if (w > config.maxSize) { h = h * config.maxSize / w; w = config.maxSize; }
-                    } else {
-                        if (h > config.maxSize) { w = w * config.maxSize / h; h = config.maxSize; }
-                    }
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    const dataUrl = canvas.toDataURL('image/jpeg', config.jpegQuality);
-                    URL.revokeObjectURL(blobUrl);
-                    resolve(dataUrl);
-                };
-                img.onerror = () => {
-                    URL.revokeObjectURL(blobUrl);
-                    resolve(null);
-                };
-                img.src = blobUrl;
-            });
-        } catch (e) {
-            return null;
-        }
-    }, [getBlobFromUrl]);
-
     const resolveCacheFetchUrl = useCallback((rawUrl, useProxy = false) => {
         if (!rawUrl || typeof rawUrl !== 'string') return rawUrl;
         if (rawUrl.startsWith('data:') || rawUrl.startsWith('blob:')) return rawUrl;
@@ -4070,6 +4019,57 @@ function TapnowApp() {
             reader.readAsDataURL(blob);
         });
     };
+
+    const generateThumbnail = useCallback(async (imageUrl, quality = 'normal', options = {}) => {
+        const config = quality === 'ultra'
+            ? { maxSize: 80, jpegQuality: 0.3 }
+            : { maxSize: 150, jpegQuality: 0.6 };
+        let resolvedUrl = imageUrl;
+        if (!resolvedUrl) return null;
+        try {
+            if (LocalImageManager.isImageId(resolvedUrl)) {
+                resolvedUrl = await LocalImageManager.getImage(resolvedUrl);
+            }
+        } catch (e) {
+            return null;
+        }
+        if (!resolvedUrl) return null;
+        try {
+            const blob = await getBlobFromUrl(resolvedUrl, {
+                useProxy: options.useProxy,
+                preferLocal: options.preferLocal
+            });
+            if (!blob) return null;
+            const blobUrl = URL.createObjectURL(blob);
+            return await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = img.naturalWidth;
+                    let h = img.naturalHeight;
+                    if (w > h) {
+                        if (w > config.maxSize) { h = h * config.maxSize / w; w = config.maxSize; }
+                    } else {
+                        if (h > config.maxSize) { w = w * config.maxSize / h; h = config.maxSize; }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', config.jpegQuality);
+                    URL.revokeObjectURL(blobUrl);
+                    resolve(dataUrl);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                    resolve(null);
+                };
+                img.src = blobUrl;
+            });
+        } catch (e) {
+            return null;
+        }
+    }, [getBlobFromUrl]);
 
     // 辅助函数：将 Base64 Data URL 转换为 Blob URL
     const base64ToBlobUrl = async (base64Data) => {

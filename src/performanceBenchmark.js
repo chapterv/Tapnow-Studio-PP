@@ -1,3 +1,5 @@
+import i18n from './i18n';
+
 /**
  * Tapnow V3.5.20-1 Performance Benchmark Test
  * 
@@ -10,6 +12,8 @@
  * - 事件处理性能
  * - 内存使用
  */
+
+const t = i18n.t.bind(i18n);
 
 const PerformanceBenchmark = {
     results: {},
@@ -74,7 +78,7 @@ const PerformanceBenchmark = {
                 jsHeapSizeLimit: (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2) + ' MB'
             };
         }
-        return { note: 'performance.memory not available (requires Chrome with --enable-precise-memory-info)' };
+        return { note: t('performance.memory not available (requires Chrome with --enable-precise-memory-info)') };
     },
 
     // 测试4: 定时器密度测试
@@ -91,7 +95,7 @@ const PerformanceBenchmark = {
         return {
             systemTimersPerSecond: (timerCount / (durationMs / 1000)).toFixed(0),
             expectedNodeTimerCalls: expectedNodeTimerCalls.toFixed(0),
-            note: 'V3.5.20-1 应为 500ms 间隔 (原 100ms)'
+            note: t('V3.5.20-1 应为 500ms 间隔 (原 100ms)')
         };
     },
 
@@ -106,19 +110,19 @@ const PerformanceBenchmark = {
 
         // 检查 Icon 导入 (查看源码注释)
         // 这需要在 console 中手动验证
-        checks.directIconImports = '需手动验证: 查看源码 Line 51-60';
+        checks.directIconImports = t('需手动验证: 查看源码 Line 51-60');
 
         // 检查定时器设置 (通过观察更新频率)
-        checks.timer500ms = '需手动验证: 查看源码 Line 2511';
+        checks.timer500ms = t('需手动验证: 查看源码 Line 2511');
 
         // 检查事件监听器
         const listenerTypes = getEventListeners ?
             Object.keys(getEventListeners(window)) :
-            '无法获取 (需 Chrome DevTools Protocol)';
+            t('无法获取 (需 Chrome DevTools Protocol)');
         checks.noMouseListeners = listenerTypes;
 
         // useMemo 需要查看源码
-        checks.useMemoFixed = '需手动验证: 查看源码 Line 3569-3570';
+        checks.useMemoFixed = t('需手动验证: 查看源码 Line 3569-3570');
 
         return checks;
     },
@@ -128,19 +132,19 @@ const PerformanceBenchmark = {
         console.log('🚀 Tapnow V3.5.20-1 Performance Benchmark');
         console.log('=========================================\n');
 
-        console.log('1️⃣ 内存使用:');
+        console.log(`1️⃣ ${t('内存使用')}:`);
         console.table(this.measureMemory());
 
-        console.log('\n2️⃣ 事件处理性能 (1000次 pointermove):');
+        console.log(`\n2️⃣ ${t('事件处理性能')} (1000次 pointermove):`);
         console.table(this.measureEventPerformance(1000));
 
-        console.log('\n3️⃣ 定时器密度测试 (2秒):');
+        console.log(`\n3️⃣ ${t('定时器密度测试')} (2秒):`);
         console.table(await this.measureTimerDensity(2000));
 
-        console.log('\n4️⃣ 优化检查清单:');
+        console.log(`\n4️⃣ ${t('优化检查清单')}:`);
         console.table(this.checkOptimizations());
 
-        console.log('\n✅ 测试完成');
+        console.log(`\n✅ ${t('测试完成')}`);
         return this.results;
     }
 };

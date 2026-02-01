@@ -64,8 +64,10 @@ import {
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import i18n from './i18n';
 
 const DEFAULT_VIEW = { x: 0, y: 0, zoom: 1 };
+const t = i18n.t.bind(i18n);
 
 
 // --- MaskVisualFeedback 组件：蒙版视觉反馈层 ---
@@ -936,7 +938,7 @@ const HistoryItem = memo(({
                         ? 'bg-green-500 border-green-400 opacity-100'
                         : 'border-white/60 bg-black/50 opacity-100 hover:bg-black/70'
                         }`}
-                    title={isSelected ? '取消选择' : '选择'}
+                    title={isSelected ? t('取消选择') : t('选择')}
                 >
                     {isSelected && <CheckCircle2 size={16} className="text-white" />}
                 </button>
@@ -1054,7 +1056,7 @@ const HistoryItem = memo(({
                                         ? 'text-black hover:text-zinc-700'
                                         : 'text-zinc-400 hover:text-zinc-900'
                                     }`}
-                                title="刷新状态"
+                                title={t('刷新状态')}
                             >
                                 <RefreshCw size={12} />
                             </button>
@@ -1067,7 +1069,7 @@ const HistoryItem = memo(({
                                     ? 'text-black hover:text-red-600'
                                     : 'text-zinc-400 hover:text-red-500'
                                 }`}
-                            title="删除"
+                            title={t('删除')}
                         >
                             <Trash2 size={12} />
                         </button>
@@ -1081,7 +1083,7 @@ const HistoryItem = memo(({
                                     ? 'text-blue-300 hover:text-blue-200 hover:bg-blue-500/20'
                                     : 'text-blue-500 hover:text-blue-600 hover:bg-blue-100'
                                     }`}
-                                title="重建缩略图"
+                                title={t('重建缩略图')}
                             >
                                 <RefreshCw size={12} />
                             </button>
@@ -1133,7 +1135,7 @@ const HistoryItem = memo(({
                     <span className={theme === 'dark' ? 'text-zinc-500' : theme === 'solarized' ? 'text-black' : 'text-zinc-400'}>
                         {item.time} · <span title={providerTitle || rawModelName}>{displayModelName}</span>
                         {typeof item.durationMs === 'number' && item.durationMs > 0 && (
-                            <> · 用时 {(item.durationMs / 1000).toFixed(1)}s</>
+                            <> · {t('用时')} {(item.durationMs / 1000).toFixed(1)}s</>
                         )}
                     </span>
                 </div>
@@ -1422,7 +1424,7 @@ const MaskEditor = ({ nodeId, imageUrl, imageDimensions, isActive, onClose, onSa
                                 ? 'hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed'
                                 : 'hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed'
                                 }`}
-                            title="撤销 (Ctrl+Z)"
+                            title={t('撤销 (Ctrl+Z)')}
                         >
                             <Undo2 size={14} />
                         </button>
@@ -1432,14 +1434,14 @@ const MaskEditor = ({ nodeId, imageUrl, imageDimensions, isActive, onClose, onSa
                                 ? 'hover:bg-zinc-800'
                                 : 'hover:bg-zinc-100'
                                 }`}
-                            title="清空"
+                            title={t('清空')}
                         >
                             <Eraser size={14} />
                         </button>
                         <button
                             onClick={handleSave}
                             className="p-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                            title="保存/完成"
+                            title={t('保存/完成')}
                         >
                             <Check size={14} />
                         </button>
@@ -3096,7 +3098,7 @@ const Lightbox = ({ item, onClose, onNavigate, onShotNavigate, onHistoryNavigate
                                 const prevIndex = currentIndex > 0 ? currentIndex - 1 : item.mjImages.length - 1;
                                 if (onNavigate) onNavigate(prevIndex);
                             }}
-                            title="上一张 (←)"
+                            title={t('上一张 (←)')}
                         >
                             <ChevronLeft size={24} />
                         </button>
@@ -3108,7 +3110,7 @@ const Lightbox = ({ item, onClose, onNavigate, onShotNavigate, onHistoryNavigate
                                 const nextIndex = currentIndex < item.mjImages.length - 1 ? currentIndex + 1 : 0;
                                 if (onNavigate) onNavigate(nextIndex);
                             }}
-                            title="下一张 (→)"
+                            title={t('下一张 (→)')}
                         >
                             <ChevronRight size={24} />
                         </button>
@@ -4413,9 +4415,9 @@ function TapnowApp() {
     const [chatSessions, setChatSessions] = useState(() => {
         try {
             const saved = localStorage.getItem('tapnow_chat_sessions');
-            return saved ? JSON.parse(saved) : [{ id: 'default', title: '新对话', messages: [] }];
+            return saved ? JSON.parse(saved) : [{ id: 'default', title: t('新对话'), messages: [] }];
         } catch (e) {
-            return [{ id: 'default', title: '新对话', messages: [] }];
+            return [{ id: 'default', title: t('新对话'), messages: [] }];
         }
     });
     const [currentChatId, setCurrentChatId] = useState('default');
@@ -4444,11 +4446,11 @@ function TapnowApp() {
             const saved = localStorage.getItem(PROMPT_LIBRARY_KEY);
             const parsed = saved ? JSON.parse(saved) : [];
             const defaults = [
-                { id: 'grid-default', name: '九宫格分镜脚本', prompt: GRID_PROMPT_TEXT },
-                { id: 'upscale-default', name: '高清放大', prompt: UPSCALE_PROMPT_TEXT },
-                { id: 'moodboard-default', name: '情绪版', prompt: MOOD_BOARD_PROMPT_TEXT },
-                { id: 'storyboard-default', name: '【分镜版】', prompt: STORYBOARD_PROMPT_TEXT },
-                { id: 'character-sheet-default', name: '【角色板】', prompt: CHARACTER_SHEET_PROMPT_TEXT }
+                { id: 'grid-default', name: t('九宫格分镜脚本'), prompt: GRID_PROMPT_TEXT },
+                { id: 'upscale-default', name: t('高清放大'), prompt: UPSCALE_PROMPT_TEXT },
+                { id: 'moodboard-default', name: t('情绪版'), prompt: MOOD_BOARD_PROMPT_TEXT },
+                { id: 'storyboard-default', name: t('【分镜版】'), prompt: STORYBOARD_PROMPT_TEXT },
+                { id: 'character-sheet-default', name: t('【角色板】'), prompt: CHARACTER_SHEET_PROMPT_TEXT }
             ];
             // 确保默认项存在且不重复
             const existingIds = new Set((parsed || []).map(p => p.id));
@@ -4460,11 +4462,11 @@ function TapnowApp() {
             return merged;
         } catch (e) {
             return [
-                { id: 'grid-default', name: '九宫格分镜脚本', prompt: GRID_PROMPT_TEXT },
-                { id: 'upscale-default', name: '高清放大', prompt: UPSCALE_PROMPT_TEXT },
-                { id: 'moodboard-default', name: '情绪版', prompt: MOOD_BOARD_PROMPT_TEXT },
-                { id: 'storyboard-default', name: '【分镜版】', prompt: STORYBOARD_PROMPT_TEXT },
-                { id: 'character-sheet-default', name: '【角色板】', prompt: CHARACTER_SHEET_PROMPT_TEXT }
+                { id: 'grid-default', name: t('九宫格分镜脚本'), prompt: GRID_PROMPT_TEXT },
+                { id: 'upscale-default', name: t('高清放大'), prompt: UPSCALE_PROMPT_TEXT },
+                { id: 'moodboard-default', name: t('情绪版'), prompt: MOOD_BOARD_PROMPT_TEXT },
+                { id: 'storyboard-default', name: t('【分镜版】'), prompt: STORYBOARD_PROMPT_TEXT },
+                { id: 'character-sheet-default', name: t('【角色板】'), prompt: CHARACTER_SHEET_PROMPT_TEXT }
             ];
         }
     });
@@ -6742,7 +6744,7 @@ function TapnowApp() {
         const values = currentValues || {};
         return (
             <div className="flex flex-col gap-2">
-                <div className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>自定义参数</div>
+                <div className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('自定义参数')}</div>
                 {customParams.map((param) => {
                     const paramId = param.id || param.name;
                     const selectedValue = getCustomParamSelection(param, values);
@@ -6771,7 +6773,7 @@ function TapnowApp() {
                                         }`}
                                     onMouseDown={(e) => e.stopPropagation()}
                                 >
-                                    <option value="">不设置</option>
+                                    <option value="">{t('不设置')}</option>
                                     {options.map(option => (
                                         <option key={option} value={option}>{getCustomParamValueLabel(param, option)}</option>
                                     ))}
@@ -6790,7 +6792,7 @@ function TapnowApp() {
                                         }
                                         onChange(next);
                                     }}
-                                    placeholder="例如: size/quality"
+                                    placeholder={t('例如: size/quality')}
                                     className={`flex-1 px-2 py-1 rounded text-xs border ${theme === 'dark'
                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
                                         : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -8898,7 +8900,7 @@ function TapnowApp() {
 
     const createNewChat = () => {
         const newId = `chat-${Date.now()}`;
-        const newSession = { id: newId, title: '新对话', messages: [] };
+        const newSession = { id: newId, title: t('新对话'), messages: [] };
         setChatSessions(prev => [newSession, ...prev]);
         setCurrentChatId(newId);
     };
@@ -8907,7 +8909,7 @@ function TapnowApp() {
         e.stopPropagation();
         const newSessions = chatSessions.filter(s => s.id !== id);
         if (newSessions.length === 0) {
-            const defaultSession = { id: 'default', title: '新对话', messages: [] };
+            const defaultSession = { id: 'default', title: t('新对话'), messages: [] };
             setChatSessions([defaultSession]);
             setCurrentChatId('default');
         } else {
@@ -9072,7 +9074,7 @@ function TapnowApp() {
         const { key: apiKey, url: baseUrl, modelName } = getApiCredentials(chatModel);
 
         if (!apiKey) {
-            alert('请先在 API 设置中配置 Key');
+            alert(t('请先在 API 设置中配置 Key'));
             setSettingsOpen(true);
             return;
         }
@@ -9114,7 +9116,7 @@ function TapnowApp() {
         let apiMessages = [
             {
                 role: 'system',
-                content: '你是一名多模态AI助手，需要结合整个对话的上下文进行连续回答。'
+                content: t('你是一名多模态AI助手，需要结合整个对话的上下文进行连续回答。')
             },
             ...recentMessages.map(m => ({
                 role: m.role,
@@ -11842,7 +11844,7 @@ function TapnowApp() {
         const sourceImage = connectedImages.length > 0 ? connectedImages[0] : undefined;
 
 
-        if (!prompt && !sourceImage) { alert('请输入提示词或连接参考图片'); return; }
+        if (!prompt && !sourceImage) { alert(t('请输入提示词或连接参考图片')); return; }
 
         // 检查是否是分镜表的虚拟节点ID（格式：storyboard-${nodeId}-shot-${shotId}）
         let node = null;
@@ -11940,7 +11942,7 @@ function TapnowApp() {
             }
         }
 
-        if (!apiKey) { alert('请先在设置中配置 API Key'); setSettingsOpen(true); return; }
+        if (!apiKey) { alert(t('请先在设置中配置 API Key')); setSettingsOpen(true); return; }
 
         // 规范化 prompt（确保角色引用 @{username} 前后有空格，仅对 Sora 2 模型）
         if (prompt && (modelId.includes('sora') || modelId === 'sora-2' || modelId === 'sora-2-pro')) {
@@ -12179,7 +12181,7 @@ function TapnowApp() {
                         contentParts.push({ type: 'image_url', image_url: { url: img } });
                     });
                     if (contentParts.length === 0) {
-                        contentParts.push({ type: 'text', text: '生成图片' });
+                        contentParts.push({ type: 'text', text: t('生成图片') });
                     }
                     payload = {
                         model: config?.modelName || modelId,
@@ -12832,7 +12834,7 @@ function TapnowApp() {
 
                     } catch (err) {
                         // V3.7.23: 参数错误和熔断错误不应被捕获后继续
-                        if (err.message.includes('参数错误') || err.message.includes('熔断保护')) {
+                        if (err.message.includes(t('参数错误')) || err.message.includes(t('熔断保护'))) {
                             throw err; // 重新抛出致命错误
                         }
                         console.warn(`[API Failover] Network/Parse request failed for ...${combo.key.slice(-4)}. Error: ${err.message}`);
@@ -13418,7 +13420,7 @@ function TapnowApp() {
                             payload.images = [base64Data];
                         } catch (e) {
                             console.error('Grok Image Conversion Failed:', e);
-                            alert('图片处理失败，请检查图片链接或跨域设置');
+                            alert(t('图片处理失败，请检查图片链接或跨域设置'));
                             return;
                         }
                     }
@@ -13956,7 +13958,7 @@ function TapnowApp() {
         );
 
         if (selectedNodes.length === 0) {
-            alert('请先选择要下载的图片或视频节点');
+            alert(t('请先选择要下载的图片或视频节点'));
             return;
         }
 
@@ -14222,7 +14224,7 @@ function TapnowApp() {
         setLightboxItem(null);
         setProjectName('未命名项目');
         setView({ ...DEFAULT_VIEW });
-        setChatSessions([{ id: 'default', title: '新对话', messages: [] }]);
+        setChatSessions([{ id: 'default', title: t('新对话'), messages: [] }]);
         setCurrentChatId('default');
         setChatInput('');
         setChatFiles([]);
@@ -14280,7 +14282,7 @@ function TapnowApp() {
                         timestamp: getCSTTimestamp()
                     };
                     await runBundleSave(projectData, bundleName, handle);
-                    alert('项目已打包保存！');
+                    alert(t('项目已打包保存！'));
                     return;
                 }
                 const timestamp = getCSTFilenameTimestamp();
@@ -14299,7 +14301,7 @@ function TapnowApp() {
                     timestamp: getCSTTimestamp()
                 };
                 await runBundleSave(projectData, bundleName);
-                alert('项目已打包保存！');
+                alert(t('项目已打包保存！'));
                 return;
             } catch (e) {
                 console.error('项目打包保存失败:', e);
@@ -14431,7 +14433,7 @@ function TapnowApp() {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                alert('项目保存成功！');
+                alert(t('项目保存成功！'));
                 return;
             }
 
@@ -14641,7 +14643,7 @@ function TapnowApp() {
 
             // 关闭流
             await writable.close();
-            alert('项目保存成功！');
+            alert(t('项目保存成功！'));
         } catch (error) {
             console.error('保存项目失败:', error);
             if (error.name === 'AbortError') {
@@ -14674,7 +14676,7 @@ function TapnowApp() {
 
             const selectedIds = selectedNodeIds.size > 0 ? selectedNodeIds : (selectedNodeId ? new Set([selectedNodeId]) : new Set());
             if (selectedIds.size === 0) {
-                alert('请先选择要保存的节点');
+                alert(t('请先选择要保存的节点'));
                 return;
             }
 
@@ -14734,7 +14736,7 @@ function TapnowApp() {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                alert('工作流保存成功！');
+                alert(t('工作流保存成功！'));
                 return;
             }
 
@@ -14830,7 +14832,7 @@ function TapnowApp() {
 
             await writable.write(`  ],\n  "connections": ${JSON.stringify(selectedConnections, replacer, 2)},\n  "timestamp": ${JSON.stringify(getCSTTimestamp())}\n}`);
             await writable.close();
-            alert('工作流保存成功！');
+            alert(t('工作流保存成功！'));
         } catch (error) {
             console.error('保存工作流失败:', error);
             if (error.name === 'AbortError') return;
@@ -14856,7 +14858,7 @@ function TapnowApp() {
                     return;
                 }
                 if (!data.nodes || data.nodes.length === 0) {
-                    alert('工作流文件中没有节点数据');
+                    alert(t('工作流文件中没有节点数据'));
                     return;
                 }
 
@@ -15496,12 +15498,12 @@ function TapnowApp() {
 
     const DESCRIPTION_STYLE_OPTIONS = [
         { value: 'none', label: '无' },
-        { value: '2d-anime', label: '2D动漫' },
-        { value: '3d-anime', label: '3D动漫' },
-        { value: 'realistic', label: '写实' },
-        { value: 'selfie', label: '自拍' },
-        { value: 'news', label: '新闻' },
-        { value: 'manga', label: '漫画' }
+        { value: '2d-anime', label: t('2D动漫') },
+        { value: '3d-anime', label: t('3D动漫') },
+        { value: 'realistic', label: t('写实') },
+        { value: 'selfie', label: t('自拍') },
+        { value: 'news', label: t('新闻') },
+        { value: 'manga', label: t('漫画') }
     ];
 
     const getDescriptionStylePrefix = useCallback((style) => {
@@ -16139,14 +16141,14 @@ function TapnowApp() {
 
         const analyzeNode = getConnectedVideoAnalyzeNode(nodeId);
         if (!analyzeNode) {
-            alert('请先连接一个视频拆解节点');
+            alert(t('请先连接一个视频拆解节点'));
             return;
         }
 
         // 获取分析结果（优先使用 settings.analysisResults，其次使用 analysisResults）
         const analysisResults = analyzeNode.settings?.analysisResults || analyzeNode.analysisResults || [];
         if (analysisResults.length === 0) {
-            alert('视频拆解节点没有分析结果，请先执行分析');
+            alert(t('视频拆解节点没有分析结果，请先执行分析'));
             return;
         }
 
@@ -16276,7 +16278,7 @@ function TapnowApp() {
             // 1. 获取配置
             const soraConfig = apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'));
             if (!soraConfig) {
-                alert('未找到 Sora 2 模型配置，请先在设置中配置 Sora 2 或 Sora 2 Pro');
+                alert(t('未找到 Sora 2 模型配置，请先在设置中配置 Sora 2 或 Sora 2 Pro'));
                 setCreateCharacterSubmitting(false);
                 return;
             }
@@ -16286,14 +16288,14 @@ function TapnowApp() {
             const apiKey = credentials.key;
 
             if (!apiKey) {
-                alert('请先配置 API Key');
+                alert(t('请先配置 API Key'));
                 setCreateCharacterSubmitting(false);
                 return;
             }
 
             // 验证时间范围
             if (endSecond - startSecond < 1 || endSecond - startSecond > 3) {
-                alert('时间范围必须在 1-3 秒之间');
+                alert(t('时间范围必须在 1-3 秒之间'));
                 setCreateCharacterSubmitting(false);
                 return;
             }
@@ -16428,7 +16430,7 @@ function TapnowApp() {
         }
 
         if (!finalPrompt) {
-            alert('请至少填写画面描述或提示词');
+            alert(t('请至少填写画面描述或提示词'));
             return;
         }
 
@@ -16437,7 +16439,7 @@ function TapnowApp() {
         const modelConfig = getApiConfigByKey(selectedModel);
 
         if (!modelConfig || modelConfig.type !== 'Video') {
-            alert('请先选择一个视频模型');
+            alert(t('请先选择一个视频模型'));
             return;
         }
 
@@ -16507,7 +16509,7 @@ function TapnowApp() {
         }
 
         if (!finalPrompt) {
-            alert('请至少填写画面描述或提示词');
+            alert(t('请至少填写画面描述或提示词'));
             return;
         }
 
@@ -16516,7 +16518,7 @@ function TapnowApp() {
         const modelConfig = getApiConfigByKey(selectedModel);
 
         if (!modelConfig || !isImageModelType(modelConfig.type)) {
-            alert('请先选择一个图片模型');
+            alert(t('请先选择一个图片模型'));
             return;
         }
 
@@ -16576,7 +16578,7 @@ function TapnowApp() {
         }
 
         if (!mjConfig) {
-            alert('请先配置 Midjourney API');
+            alert(t('请先配置 Midjourney API'));
             setSettingsOpen(true);
             return;
         }
@@ -16586,7 +16588,7 @@ function TapnowApp() {
         const apiKey = credentials.key;
         const baseUrl = credentials.url;
         if (!apiKey) {
-            alert('请先配置 Midjourney API Key');
+            alert(t('请先配置 Midjourney API Key'));
             setSettingsOpen(true);
             return;
         }
@@ -16598,7 +16600,7 @@ function TapnowApp() {
                 const httpUrl = await uploadImageToGetHttpUrl(imageUrl, baseUrl, apiKey);
                 if (!httpUrl) {
                     console.error('拓展图片: 图片上传失败，所有方法都失败');
-                    alert('图片上传失败，无法进行拓展。请检查网络连接和API配置。');
+                    alert(t('图片上传失败，无法进行拓展。请检查网络连接和API配置。'));
                     return;
                 }
                 imageUrl = httpUrl;
@@ -17023,13 +17025,13 @@ ${inputText.substring(0, 15000)} ... (截断)
 
         const videoInputNode = getConnectedVideoInputNode(nodeId);
         if (!videoInputNode) {
-            alert('请先连接一个视频输入节点');
+            alert(t('请先连接一个视频输入节点'));
             return;
         }
 
         const selectedKeyframes = videoInputNode.selectedKeyframes || [];
         if (selectedKeyframes.length === 0) {
-            alert('请先在视频输入节点中选择关键帧');
+            alert(t('请先在视频输入节点中选择关键帧'));
             return;
         }
 
@@ -17040,7 +17042,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const config = getApiConfigByKey(modelId);
 
         if (!apiKey) {
-            alert('请先在 API 设置中配置 Key');
+            alert(t('请先在 API 设置中配置 Key'));
             setSettingsOpen(true);
             return;
         }
@@ -17049,7 +17051,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const groups = groupKeyframesByTime(selectedKeyframes, segmentDuration);
 
         if (groups.length === 0) {
-            alert('无法分组关键帧');
+            alert(t('无法分组关键帧'));
             return;
         }
 
@@ -17328,7 +17330,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
         const videoInputNode = getConnectedVideoInputNode(nodeId);
         if (!videoInputNode || !videoInputNode.content) {
-            alert('请先连接一个包含视频的视频输入节点');
+            alert(t('请先连接一个包含视频的视频输入节点'));
             return;
         }
 
@@ -17345,7 +17347,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                 });
             } catch (e) {
                 console.error('Blob conversion failed', e);
-                alert('视频转换失败，无法发送给 AI');
+                alert(t('视频转换失败，无法发送给 AI'));
                 return;
             }
         }
@@ -17370,7 +17372,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const { key: apiKey, url: baseUrl } = getApiCredentials(config?.id || 'gemini-3-pro');
 
         if (!apiKey) {
-            alert('请先在 API 设置中配置 Key');
+            alert(t('请先在 API 设置中配置 Key'));
             setSettingsOpen(true);
             return;
         }
@@ -17418,7 +17420,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
             // 直接使用视频 URL（gemini-3-pro 支持视频输入）
             const userContent = [
-                { type: "text", text: "请分析这段视频。请严格按JSON格式输出拆解报告。" },
+                { type: "text", text: t('请分析这段视频。请严格按JSON格式输出拆解报告。') },
                 { type: "image_url", image_url: { url: videoDataUrl } }
             ];
 
@@ -17605,7 +17607,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const name = promptLibraryForm.name.trim();
         const prompt = promptLibraryForm.prompt.trim();
         if (!name || !prompt) {
-            alert('请输入名称和提示词内容');
+            alert(t('请输入名称和提示词内容'));
             return;
         }
         setPromptLibrary((prev) => [
@@ -17626,13 +17628,13 @@ ${inputText.substring(0, 15000)} ... (截断)
     const generateGridPrompt = () => {
         const currentSelectedId = selectedNodeIdRef.current;
         if (!currentSelectedId) {
-            alert('请先选中一个AI绘图节点');
+            alert(t('请先选中一个AI绘图节点'));
             return;
         }
 
         const targetNode = nodesRef.current.find(n => n.id === currentSelectedId);
         if (!targetNode || targetNode.type !== 'gen-image') {
-            alert('请选中一个AI绘图节点（gen-image）');
+            alert(t('请选中一个AI绘图节点（gen-image）'));
             return;
         }
 
@@ -17649,20 +17651,20 @@ ${inputText.substring(0, 15000)} ... (截断)
         updateNodeSettings(targetNode.id, { prompt: gridPrompt });
 
         // 提示用户
-        alert('已生成九宫格分镜脚本提示词！');
+        alert(t('已生成九宫格分镜脚本提示词！'));
     };
 
     // 智能拆分放大：直接生成提示词
     const handleUpscale = () => {
         const currentSelectedId = selectedNodeIdRef.current;
         if (!currentSelectedId) {
-            alert('请选择图片生成节点进行放大。');
+            alert(t('请选择图片生成节点进行放大。'));
             return;
         }
 
         const targetNode = nodesRef.current.find(n => n.id === currentSelectedId);
         if (!targetNode || targetNode.type !== 'gen-image') {
-            alert('请选择图片生成节点进行放大。');
+            alert(t('请选择图片生成节点进行放大。'));
             return;
         }
 
@@ -17672,7 +17674,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         updateNodeSettings(targetNode.id, { prompt: upscalePrompt });
 
         // 提示用户
-        alert('已生成高清放大提示词！');
+        alert(t('已生成高清放大提示词！'));
     };
 
     // 切割九宫格图片（3x3网格）
@@ -17759,19 +17761,19 @@ ${inputText.substring(0, 15000)} ... (截断)
     const handleSplitGridImage = async () => {
         const currentSelectedId = selectedNodeIdRef.current;
         if (!currentSelectedId) {
-            alert('请先选中一个图片节点');
+            alert(t('请先选中一个图片节点'));
             return;
         }
 
         const targetNode = nodesRef.current.find(n => n.id === currentSelectedId);
         if (!targetNode) {
-            alert('未找到选中的节点');
+            alert(t('未找到选中的节点'));
             return;
         }
 
         const imageUrl = targetNode.content;
         if (!imageUrl) {
-            alert('选中的节点没有图片内容');
+            alert(t('选中的节点没有图片内容'));
             return;
         }
 
@@ -17780,7 +17782,7 @@ ${inputText.substring(0, 15000)} ... (截断)
             const croppedImages = await splitGridImage(imageUrl);
 
             if (croppedImages.length !== 9) {
-                alert('切割失败：未能生成9张图片');
+                alert(t('切割失败：未能生成9张图片'));
                 return;
             }
 
@@ -17842,7 +17844,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         try {
             const croppedImages = await splitGridImage(imageUrl);
             if (croppedImages.length !== 9) {
-                alert('切割失败：未能生成9张图片');
+                alert(t('切割失败：未能生成9张图片'));
                 return;
             }
 
@@ -17914,7 +17916,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         }
 
         if (nodesToArrange.length < 2) {
-            alert('请至少选中两个节点进行智能整理');
+            alert(t('请至少选中两个节点进行智能整理'));
             return;
         }
 
@@ -18519,7 +18521,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
         const videoInputNode = getConnectedVideoInputNode(nodeId);
         if (!videoInputNode || !videoInputNode.content) {
-            alert('请先连接一个包含视频的视频输入节点');
+            alert(t('请先连接一个包含视频的视频输入节点'));
             return;
         }
 
@@ -18528,7 +18530,7 @@ ${inputText.substring(0, 15000)} ... (截断)
         const { key: apiKey, url: baseUrl } = getApiCredentials(modelId);
 
         if (!apiKey) {
-            alert('请先在 API 设置中配置 Key');
+            alert(t('请先在 API 设置中配置 Key'));
             setSettingsOpen(true);
             return;
         }
@@ -19405,7 +19407,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
             if (count === 0) {
                 setDownloadProgress({ active: false, current: 0, total: 0 });
-                alert('没有可下载的有效资源');
+                alert(t('没有可下载的有效资源'));
                 return;
             }
 
@@ -19502,7 +19504,7 @@ ${inputText.substring(0, 15000)} ... (截断)
     const handleStoryboardBatchDownload = async (node, scope = 'all') => {
         const items = buildStoryboardDownloadItems(node, scope);
         if (!items.length) {
-            alert('没有可下载的资源');
+            alert(t('没有可下载的资源'));
             return;
         }
 
@@ -19559,7 +19561,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
         if (added === 0) {
             setDownloadProgress({ active: false, current: 0, total: 0 });
-            alert('没有可下载的有效资源');
+            alert(t('没有可下载的有效资源'));
             return;
         }
 
@@ -20451,7 +20453,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div
                                 className={`input-point ${connectingTarget === node.id && !connectingInputType ? 'active' : ''}`}
                                 style={{ top: '33%' }}
-                                title="图 1 输入"
+                                title={t('图 1 输入')}
                                 onMouseDown={(e) => {
                                     e.stopPropagation();
                                     e.preventDefault();
@@ -20466,7 +20468,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div
                                 className={`input-point ${connectingTarget === node.id && !connectingInputType ? 'active' : ''}`}
                                 style={{ top: '66%' }}
-                                title="图 2 输入"
+                                title={t('图 2 输入')}
                                 onMouseDown={(e) => {
                                     e.stopPropagation();
                                     e.preventDefault();
@@ -20482,7 +20484,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                     ) : (
                         <div
                             className={`input-point ${isConnected ? 'connected' : ''} ${connectingTarget === node.id && !connectingInputType ? 'active' : ''}`}
-                            title="输入"
+                            title={t('输入')}
                             onMouseDown={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
@@ -20500,7 +20502,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                 {node.type !== 'preview' && (
                     <div
                         className={`connector connector-right ${connectingSource === node.id ? 'active' : ''} ${connectingTarget && hoverTargetId === node.id ? 'ring-2 ring-green-500/50' : ''}`}
-                        title="输出"
+                        title={t('输出')}
                         onMouseDown={(e) => {
                             e.stopPropagation();
                             e.preventDefault();
@@ -20526,7 +20528,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                         <div className={`relative w-full h-full flex flex-col transition-colors pointer-events-auto ${theme === 'dark' ? 'bg-zinc-900/80' : theme === 'solarized' ? 'bg-[#fdf6e3]' : 'bg-zinc-100'}`}>
                             <div className="flex items-center gap-1.5 px-3 py-2 border-b text-xs font-semibold shrink-0">
                                 <FileText size={12} className="text-blue-500" />
-                                <span>小说输入</span>
+                                <span>{t('小说输入')}</span>
                             </div>
                             <div className="flex-1 flex flex-col gap-2 p-3 overflow-hidden min-h-0">
                                 <textarea
@@ -20537,7 +20539,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             updateNodeSettings(node.id, { content: newValue });
                                         }
                                     }}
-                                    placeholder="输入小说内容（最多10,000字）..."
+                                    placeholder={t('输入小说内容（最多10,000字）...')}
                                     maxLength={10000}
                                     className={`w-full flex-1 resize-none outline-none text-sm p-2 rounded border ${theme === 'dark'
                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
@@ -20555,7 +20557,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     onMouseDown={(e) => e.stopPropagation()}
                                     onClick={(e) => { e.stopPropagation(); handleNovelExtract(node.id); }}
                                 >
-                                    <Sparkles size={12} /> 提取角色和场景
+                                    <Sparkles size={12} /> {t('提取角色和场景')}
                                 </button>
                             </div>
                         </div>
@@ -20565,7 +20567,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
                                 <div className="flex items-center gap-1.5 text-xs font-semibold">
                                     <Users size={12} className="text-purple-500" />
-                                    <span>角色与场景提取</span>
+                                    <span>{t('角色与场景提取')}</span>
                                 </div>
                                 {node.settings?.analysisResults && (
                                     <span className="text-[10px] opacity-70">
@@ -20662,7 +20664,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             return (
                                                 <div className="flex flex-col items-center justify-center py-6 text-[11px] opacity-70">
                                                     <Wand2 size={18} className="mb-1 opacity-70" />
-                                                    <span>点击“开始提取”开始分析</span>
+                                                    <span>{t('点击“开始提取”开始分析')}</span>
                                                 </div>
                                             );
                                         }
@@ -20845,7 +20847,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 
                                             <div className="flex flex-col gap-1">
                                                 <div className="flex items-center justify-between text-[10px] text-zinc-500">
-                                                    <span>提示词</span>
+                                                    <span>{t('提示词')}</span>
                                                     {node.settings?.isEnhancing && (
                                                         <span className="flex items-center gap-1 text-blue-400">
                                                             <Loader2 size={10} className="animate-spin" />
@@ -20856,7 +20858,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <textarea
                                                     value={promptValue}
                                                     onChange={(e) => updateNodeSettings(node.id, { prompt: e.target.value })}
-                                                    placeholder="输入角色/场景描述提示词..."
+                                                    placeholder={t('输入角色/场景描述提示词...')}
                                                     className={`w-full h-28 resize-none outline-none text-sm p-2 rounded border ${theme === 'dark'
                                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
                                                         : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -20991,7 +20993,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             updateNodeSettings(node.id, { referenceImages: nextRefs });
                                                                         }}
                                                                         className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500"
-                                                                        title="删除"
+                                                                        title={t('删除')}
                                                                     >
                                                                         <X size={10} />
                                                                     </button>
@@ -21097,12 +21099,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                                 : 'bg-blue-50 text-blue-600 border border-blue-200'
                                                 }`}>
-                                                {isGenerating ? <span>? {elapsedSeconds.toFixed(1)}s</span> : <span>? 完成 {finalDuration}s</span>}
+                                                {isGenerating ? <span>? {elapsedSeconds.toFixed(1)}s</span> : <span>? {t('完成')} {finalDuration}s</span>}
                                             </div>
                                         )}
                                         <div className={`flex items-center gap-1.5 px-3 py-2 border-b text-xs font-semibold shrink-0 ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
                                             <FileVideo size={12} className="text-green-500" />
-                                            <span>{isCharacter ? '生成角色视频' : '生成场景视频'}</span>
+                                            <span>{isCharacter ? t('生成角色视频') : t('生成场景视频')}</span>
                                         </div>
 
                                         <div className="flex-1 flex flex-col gap-3 p-3 overflow-y-auto min-h-0">
@@ -21223,7 +21225,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             </div>
 
                                             <div>
-                                                <label className="text-[10px] block mb-1 text-zinc-500">分辨率</label>
+                                                <label className="text-[10px] block mb-1 text-zinc-500">{t('分辨率')}</label>
                                                 <select
                                                     value={resolvedResolution}
                                                     onChange={(e) => {
@@ -21251,11 +21253,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             </div>
 
                                             <div>
-                                                <label className="text-[10px] block mb-1 text-zinc-500">提示词</label>
+                                                <label className="text-[10px] block mb-1 text-zinc-500">{t('提示词')}</label>
                                                 <textarea
                                                     value={basePrompt}
                                                     onChange={(e) => updateNodeSettings(node.id, { videoPrompt: e.target.value })}
-                                                    placeholder="输入视频生成提示词..."
+                                                    placeholder={t('输入视频生成提示词...')}
                                                     className={`w-full h-20 resize-none outline-none text-sm p-2 rounded border ${theme === 'dark'
                                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
                                                         : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -21327,11 +21329,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     const referenceImages = node.settings?.referenceImages || descriptionNode?.settings?.referenceImages || [];
                                                     const sourceImages = selectedImageUrl ? [selectedImageUrl] : referenceImages;
                                                     if (!prompt && sourceImages.length === 0) {
-                                                        alert('请先输入提示词或选择图片');
+                                                        alert(t('请先输入提示词或选择图片'));
                                                         return;
                                                     }
                                                     if (!modelId) {
-                                                        alert('请先选择模型');
+                                                        alert(t('请先选择模型'));
                                                         return;
                                                     }
                                                     startGeneration(
@@ -21375,7 +21377,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     <>
                                         <div className={`flex items-center gap-1.5 px-3 py-2 border-b text-xs font-semibold shrink-0 ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
                                             <FileText size={12} className="text-blue-500" />
-                                            <span>{isScene ? '生成场景图片' : '生成角色图片'}</span>
+                                            <span>{isScene ? t('生成场景图片') : t('生成角色图片')}</span>
                                         </div>
 
                                         <div className="flex-1 flex flex-col gap-3 p-3 overflow-y-auto min-h-0">
@@ -21473,7 +21475,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             </div>
 
                                             <div>
-                                                <label className="text-[10px] block mb-1 text-zinc-500">分辨率</label>
+                                                <label className="text-[10px] block mb-1 text-zinc-500">{t('分辨率')}</label>
                                                 <select
                                                     value={node.settings?.resolution || '2K'}
                                                     onChange={(e) => updateNodeSettings(node.id, { resolution: e.target.value })}
@@ -21491,11 +21493,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             </div>
 
                                             <div>
-                                                <label className="text-[10px] block mb-1 text-zinc-500">提示词</label>
+                                                <label className="text-[10px] block mb-1 text-zinc-500">{t('提示词')}</label>
                                                 <textarea
                                                     value={node.settings?.prompt || ''}
                                                     onChange={(e) => updateNodeSettings(node.id, { prompt: e.target.value })}
-                                                    placeholder="输入图片生成提示词..."
+                                                    placeholder={t('输入图片生成提示词...')}
                                                     className={`w-full h-20 resize-none outline-none text-sm p-2 rounded border ${theme === 'dark'
                                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
                                                         : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -21582,11 +21584,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     const prompt = node.settings?.prompt || '';
                                                     const modelId = resolveModelKey(node.settings?.model || lastUsedImageModel || apiConfigs.find(c => isImageModelType(c.type))?.id || '');
                                                     if (!prompt && (!node.settings?.referenceImages || node.settings.referenceImages.length === 0)) {
-                                                        alert('请先输入提示词或添加参考图');
+                                                        alert(t('请先输入提示词或添加参考图'));
                                                         return;
                                                     }
                                                     if (!modelId) {
-                                                        alert('请先选择模型');
+                                                        alert(t('请先选择模型'));
                                                         return;
                                                     }
                                                     startGeneration(
@@ -21718,7 +21720,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     const start = startSecond ?? 1;
                                                     const end = endSecond ?? 3;
                                                     if (end - start < 1 || end - start > 3) {
-                                                        alert('时间范围必须在 1-3 秒之间');
+                                                        alert(t('时间范围必须在 1-3 秒之间'));
                                                         return;
                                                     }
 
@@ -21728,14 +21730,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         .map(c => nodesMap.get(c.from))
                                                         .find(n => n?.type === targetVideoType);
                                                     if (!videoNode) {
-                                                        alert('找不到关联的视频节点');
+                                                        alert(t('找不到关联的视频节点'));
                                                         return;
                                                     }
 
                                                     const historyItem = history.find(h => h.sourceNodeId === videoNode.id && h.status === 'completed');
                                                     const videoUrl = historyItem?.localCacheUrl || historyItem?.url || historyItem?.originalUrl || videoNode.content || '';
                                                     if (!videoUrl) {
-                                                        alert('视频节点没有视频URL');
+                                                        alert(t('视频节点没有视频URL'));
                                                         return;
                                                     }
 
@@ -21746,7 +21748,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         const soraConfig = apiConfigs.find(c => c.type === 'Video' && (c.id === 'sora-2' || c.id === 'sora-2-pro'));
                                                         if (!soraConfig) {
                                                             updateNodeSettings(node.id, { isCreating: false, createError: '未找到 Sora 2 模型配置' });
-                                                            alert('未找到 Sora 2 模型配置，请先在设置中配置 Sora 2 或 Sora 2 Pro');
+                                                            alert(t('未找到 Sora 2 模型配置，请先在设置中配置 Sora 2 或 Sora 2 Pro'));
                                                             return;
                                                         }
 
@@ -21754,7 +21756,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         const apiKey = credentials.key;
                                                         if (!apiKey) {
                                                             updateNodeSettings(node.id, { isCreating: false, createError: '请先配置 API Key' });
-                                                            alert('请先配置 API Key');
+                                                            alert(t('请先配置 API Key'));
                                                             setSettingsOpen(true);
                                                             return;
                                                         }
@@ -21850,7 +21852,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
                                     <div className="flex items-center gap-1.5 text-xs font-semibold">
                                         <HardDrive size={12} className="text-green-500" />
-                                        <span>保存到本地</span>
+                                        <span>{t('保存到本地')}</span>
                                     </div>
                                     <div className={`w-2 h-2 rounded-full ${serverConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} title={serverConnected ? "已连接本地服务" : "未连接"} />
                                 </div>
@@ -21901,7 +21903,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     </div>
 
                                     <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1">
-                                        <span>待保存文件</span>
+                                        <span>{t('待保存文件')}</span>
                                         <span>{pendingCount}</span>
                                     </div>
                                     {pendingCount > 0 ? (
@@ -21922,17 +21924,17 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             })}
                                         </div>
                                     ) : (
-                                        <div className="text-[10px] text-zinc-500">暂无待保存文件</div>
+                                        <div className="text-[10px] text-zinc-500">{t('暂无待保存文件')}</div>
                                     )}
 
                                     <div className="mt-auto border-t pt-2 border-zinc-700/50">
                                         <div className="text-[10px] text-zinc-500 flex justify-between">
-                                            <span>上次保存:</span>
-                                            <span>{node.settings?.lastSaved ? node.settings.lastSaved.split(' ')[1] : '无'}</span>
+                                            <span>{t('上次保存:')}</span>
+                                            <span>{node.settings?.lastSaved ? node.settings.lastSaved.split(' ')[1] : t('无')}</span>
                                         </div>
                                         <div className="text-[10px] text-zinc-500 flex justify-between mt-1">
-                                            <span>已保存:</span>
-                                            <span>{node.settings?.savedFiles?.length || 0} 个</span>
+                                            <span>{t('已保存:')}</span>
+                                            <span>{node.settings?.savedFiles?.length || 0} {t('个')}</span>
                                         </div>
                                     </div>
 
@@ -22176,7 +22178,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div className="flex items-center justify-between px-3 py-2 border-b text-xs font-semibold">
                                 <div className="flex items-center gap-1.5">
                                     <Video size={13} className="text-blue-500" />
-                                    <span>视频输入 / 关键帧整理</span>
+                                    <span>{t('视频输入 / 关键帧整理')}</span>
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -22212,7 +22214,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                                    {node.videoMeta?.duration ? <span>时长 {node.videoMeta.duration.toFixed(1)}s</span> : null}
+                                    {node.videoMeta?.duration ? <span>{t('时长')} {node.videoMeta.duration.toFixed(1)}s</span> : null}
                                     {node.videoMeta?.w ? <span>{node.videoMeta.w}x{node.videoMeta.h}</span> : null}
                                     {node.selectedKeyframes?.length ? <span className="text-blue-500">关键帧 {node.selectedKeyframes.length} 个</span> : null}
                                 </div>
@@ -22308,9 +22310,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 }
 
                                 <div className="flex items-center justify-between text-[11px] text-zinc-500">
-                                    <span>抽帧缩略图</span>
+                                    <span>{t('抽帧缩略图')}</span>
                                     <div className="flex items-center gap-2 flex-nowrap shrink-0 whitespace-nowrap">
-                                        <span>{(node.frames || []).length} 张</span>
+                                        <span>{(node.frames || []).length} {t('张')}</span>
                                         {(node.frames || []).length > 0 && (
                                             <>
                                                 <button
@@ -22343,7 +22345,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 </button>
                                                 <button
                                                     onClick={() => {
-                                                        if (confirm('确定要清空所有抽帧缩略图吗？')) {
+                                                        if (confirm(t('确定要清空所有抽帧缩略图吗？'))) {
                                                             setNodes(prev => prev.map(n =>
                                                                 n.id === node.id
                                                                     ? { ...n, frames: [], selectedKeyframes: [] }
@@ -22355,10 +22357,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         ? 'bg-red-600/30 text-red-300 hover:bg-red-600/50'
                                                         : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
                                                     onMouseDown={(e) => e.stopPropagation()}
-                                                    title="清空所有缩略图"
+                                                    title={t('清空所有缩略图')}
                                                 >
                                                     <Trash2 size={10} />
-                                                    清空
+                                                    {t('清空')}
                                                 </button>
                                             </>
                                         )}
@@ -22450,7 +22452,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     }));
                                                                 }}
                                                                 className="pointer-events-auto w-5 h-5 rounded bg-red-600/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 my-1 shrink-0"
-                                                                title="删除此帧"
+                                                                title={t('删除此帧')}
                                                             >
                                                                 <X size={12} />
                                                             </button>
@@ -22477,7 +22479,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             }));
                                                                         }}
                                                                         className="w-5 h-5 rounded bg-black/70 text-white flex items-center justify-center hover:bg-blue-600"
-                                                                        title="上移"
+                                                                        title={t('上移')}
                                                                     >
                                                                         <ChevronUp size={12} />
                                                                     </button>
@@ -22501,7 +22503,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             }));
                                                                         }}
                                                                         className="w-5 h-5 rounded bg-black/70 text-white flex items-center justify-center hover:bg-blue-600"
-                                                                        title="下移"
+                                                                        title={t('下移')}
                                                                     >
                                                                         <ChevronDown size={12} />
                                                                     </button>
@@ -22534,7 +22536,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div className="flex items-center justify-between px-3 py-2 border-b text-xs font-semibold">
                                 <div className="flex items-center gap-1.5">
                                     <FileText size={13} className="text-blue-500" />
-                                    <span>文字节点</span>
+                                    <span>{t('文字节点')}</span>
                                 </div>
                             </div>
                             <div className="flex-1 p-3">
@@ -22545,7 +22547,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     onChange={(e) => {
                                         updateNodeSettings(node.id, { text: e.target.value });
                                     }}
-                                    placeholder="输入文字内容..."
+                                    placeholder={t('输入文字内容...')}
                                     className={`w-full h-full resize-none outline-none text-sm p-2 rounded border ${theme === 'dark'
                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500'
                                         : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -22585,7 +22587,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             <div className="flex items-center justify-between px-3 py-2 border-b text-xs font-semibold">
                                 <div className="flex items-center gap-1.5">
                                     <FileSearch size={13} className="text-blue-500" />
-                                    <span>视频拆解 / 提示词反推</span>
+                                    <span>{t('视频拆解 / 提示词反推')}</span>
                                 </div>
                             </div>
 
@@ -22596,7 +22598,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         return (
                                             <div className="flex flex-col items-center justify-center flex-1 gap-2 text-[11px] text-zinc-500">
                                                 <LinkIcon size={24} className="text-zinc-400" />
-                                                <span>请连接一个视频输入节点</span>
+                                                <span>{t('请连接一个视频输入节点')}</span>
                                             </div>
                                         );
                                     }
@@ -22613,9 +22615,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         <span className="text-zinc-500">{videoInputNode.isImageInput ? '关联的图片' : '关联的视频'}</span>
                                                     </div>
                                                     <div className="text-zinc-700 dark:text-zinc-300">
-                                                        <div>文件名: {videoInputNode.isImageInput ? '图片输入' : videoFileName}</div>
-                                                        {!videoInputNode.isImageInput && <div>总时长: {videoDuration.toFixed(1)}s</div>}
-                                                        <div>已选关键帧: {selectedKeyframes.length} 个</div>
+                                                        <div>{t('文件名:')} {videoInputNode.isImageInput ? t('图片输入') : videoFileName}</div>
+                                                        {!videoInputNode.isImageInput && <div>{t('总时长:')} {videoDuration.toFixed(1)}s</div>}
+                                                        <div>{t('已选关键帧:')} {selectedKeyframes.length} {t('个')}</div>
                                                     </div>
                                                 </div>
 
@@ -22768,12 +22770,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     {node.isGenerating ? (
                                                         <>
                                                             <Loader2 size={14} className="animate-spin" />
-                                                            <span>{node.settings?.analysisMode === 'auto' ? 'AI 正在拉片分析中...' : '生成中...'}</span>
+                                                            <span>{node.settings?.analysisMode === 'auto' ? t('AI 正在拉片分析中...') : t('生成中...')}</span>
                                                         </>
                                                     ) : (
                                                         <>
                                                             <Sparkles size={14} />
-                                                            <span>{node.settings?.analysisMode === 'auto' ? '开始全自动拆解视频' : '为选中关键帧生成提示词'}</span>
+                                                            <span>{node.settings?.analysisMode === 'auto' ? t('开始全自动拆解视频') : t('为选中关键帧生成提示词')}</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -22852,7 +22854,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 onMouseDown={(e) => e.stopPropagation()}
                                                                             >{scene.keyframes[0].jimeng_prompt}</p>
                                                                             <button onClick={() => navigator.clipboard.writeText(scene.keyframes[0].jimeng_prompt)} className="mt-1 flex items-center text-[9px] text-blue-400 hover:text-blue-300" onMouseDown={(e) => e.stopPropagation()}>
-                                                                                <ClipboardCopy size={10} className="mr-1" /> 复制
+                                                                                <ClipboardCopy size={10} className="mr-1" /> {t('复制')}
                                                                             </button>
                                                                         </div>
                                                                     )}
@@ -22866,7 +22868,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 onMouseDown={(e) => e.stopPropagation()}
                                                                             >{scene.keyframes[0].mj_prompt}</p>
                                                                             <button onClick={() => navigator.clipboard.writeText(scene.keyframes[0].mj_prompt)} className="mt-1 flex items-center text-[9px] text-blue-400 hover:text-blue-300" onMouseDown={(e) => e.stopPropagation()}>
-                                                                                <ClipboardCopy size={10} className="mr-1" /> 复制
+                                                                                <ClipboardCopy size={10} className="mr-1" /> {t('复制')}
                                                                             </button>
                                                                         </div>
                                                                     )}
@@ -22970,14 +22972,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     onClick={async () => {
                                                                                                         try {
                                                                                                             await navigator.clipboard.writeText(kf.mj_prompt);
-                                                                                                            alert('已复制到剪贴板');
+                                                                                                            alert(t('已复制到剪贴板'));
                                                                                                         } catch (e) {
-                                                                                                            alert('复制失败');
+                                                                                                            alert(t('复制失败'));
                                                                                                         }
                                                                                                     }}
                                                                                                     className={`p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700'}`}
                                                                                                     onMouseDown={(e) => e.stopPropagation()}
-                                                                                                    title="复制"
+                                                                                                    title={t('复制')}
                                                                                                 >
                                                                                                     <CopyPlus size={12} />
                                                                                                 </button>
@@ -23029,7 +23031,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     }}
                                                                                                     className={`p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-blue-600 dark:text-blue-400`}
                                                                                                     onMouseDown={(e) => e.stopPropagation()}
-                                                                                                    title="生成图生图节点"
+                                                                                                    title={t('生成图生图节点')}
                                                                                                 >
                                                                                                     <ImagePlus size={12} />
                                                                                                 </button>
@@ -23053,14 +23055,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 onClick={async () => {
                                                                                                     try {
                                                                                                         await navigator.clipboard.writeText(kf.jimeng_prompt);
-                                                                                                        alert('已复制到剪贴板');
+                                                                                                        alert(t('已复制到剪贴板'));
                                                                                                     } catch (e) {
-                                                                                                        alert('复制失败');
+                                                                                                        alert(t('复制失败'));
                                                                                                     }
                                                                                                 }}
                                                                                                 className={`p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${theme === 'dark' ? 'text-zinc-400 hover:text-zinc-300' : 'text-zinc-500 hover:text-zinc-700'}`}
                                                                                                 onMouseDown={(e) => e.stopPropagation()}
-                                                                                                title="复制"
+                                                                                                title={t('复制')}
                                                                                             >
                                                                                                 <CopyPlus size={12} />
                                                                                             </button>
@@ -23226,7 +23228,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     type="text"
                                                     value={node.settings?.projectTitle || ''}
                                                     onChange={(e) => updateNodeSettings(node.id, { projectTitle: e.target.value })}
-                                                    placeholder="项目名称"
+                                                    placeholder={t('项目名称')}
                                                     className={`font-bold text-xs bg-transparent border-b border-blue-500 outline-none w-32 transition-colors ${theme === 'dark' ? 'text-zinc-200 placeholder-zinc-500' : 'text-zinc-800 placeholder-zinc-400'}`}
                                                     onMouseDown={(e) => e.stopPropagation()}
                                                     onClick={(e) => e.stopPropagation()}
@@ -23242,7 +23244,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             ) : (
                                                 <span
                                                     className={`font-bold text-xs cursor-move ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-800'} ${!node.settings?.projectTitle ? (theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400') : ''}`}
-                                                    title="拖动移动窗口"
+                                                    title={t('拖动移动窗口')}
                                                 >
                                                     {node.settings?.projectTitle || '项目名称'}
                                                 </span>
@@ -23256,7 +23258,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 className={`p-0.5 rounded transition-colors ${node.settings?.isEditingTitle
                                                     ? 'text-blue-500'
                                                     : theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                title="编辑项目名称"
+                                                title={t('编辑项目名称')}
                                             >
                                                 <Pencil size={12} />
                                             </button>
@@ -23284,9 +23286,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         ? 'bg-blue-500 text-white shadow-sm'
                                                         : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-700'}`}
                                                     onMouseDown={(e) => e.stopPropagation()}
-                                                    title="切换到图片生成模式"
+                                                    title={t('切换到图片生成模式')}
                                                 >
-                                                    图片
+                                                    {t('图片')}
                                                 </button>
                                                 <button
                                                     onClick={(e) => {
@@ -23310,9 +23312,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         ? 'bg-green-500 text-white shadow-sm'
                                                         : theme === 'dark' ? 'text-zinc-400 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-700'}`}
                                                     onMouseDown={(e) => e.stopPropagation()}
-                                                    title="切换到视频生成模式"
+                                                    title={t('切换到视频生成模式')}
                                                 >
-                                                    视频
+                                                    {t('视频')}
                                                 </button>
                                             </div>
                                         </div>
@@ -23321,12 +23323,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (confirm('确定要清空所有镜头吗？')) {
+                                                    if (confirm(t('确定要清空所有镜头吗？'))) {
                                                         updateNodeSettings(node.id, { shots: [] });
                                                     }
                                                 }}
                                                 className="p-1 hover:bg-red-100 hover:text-red-500 rounded text-zinc-400 transition-colors"
-                                                title="清空所有镜头"
+                                                title={t('清空所有镜头')}
                                             >
                                                 <Trash2 size={14} />
                                             </button>
@@ -23400,7 +23402,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     <button
                                                         onClick={async () => {
                                                             if (!connectedVideoNode || keyframeCount === 0) {
-                                                                alert('请先连接视频输入节点并选择关键帧');
+                                                                alert(t('请先连接视频输入节点并选择关键帧'));
                                                                 return;
                                                             }
                                                             const keyframes = connectedVideoNode.selectedKeyframes;
@@ -23501,7 +23503,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     value={batchConcurrency}
                                                     onChange={(e) => setBatchConcurrency(Math.max(0, parseInt(e.target.value) || 0))}
                                                     className={`w-8 text-center text-xs rounded border outline-none py-0.5 ${theme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-300'}`}
-                                                    title="并发数量 (0=全部)"
+                                                    title={t('并发数量 (0=全部)')}
                                                 />
                                                 <button
                                                     onClick={() => {
@@ -23556,11 +23558,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 const isAllLocked = allShots.every(s => s.outputEnabled);
                                                                 const hasGenerating = allShots.some(s => s.status === 'generating');
                                                                 if (hasGenerating) {
-                                                                    alert('有镜头正在生成中，请等待完成后再试。');
+                                                                    alert(t('有镜头正在生成中，请等待完成后再试。'));
                                                                 } else if (isAllLocked && allShots.length > 0) {
                                                                     alert('所有镜头已锁定（灰框已勾选），无法重新生成。\n请取消勾选需要重新生成的镜头。');
                                                                 } else {
-                                                                    alert('没有待生成的镜头');
+                                                                    alert(t('没有待生成的镜头'));
                                                                 }
                                                                 return;
                                                             }
@@ -23656,7 +23658,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 });
                                                         }}
                                                         className={`p-1 rounded transition-colors flex items-center gap-0.5 ${theme === 'dark' ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600'}`}
-                                                        title="批量下载"
+                                                        title={t('批量下载')}
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                     >
                                                         <Download size={12} />
@@ -23762,7 +23764,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     onClick={() => {
                                                                         setActiveDropdown(null);
                                                                         if (nodeQueueItems.length === 0) return;
-                                                                        if (confirm('确定清空排队任务吗？')) clearNodeQueue(node.id, false);
+                                                                        if (confirm(t('确定清空排队任务吗？'))) clearNodeQueue(node.id, false);
                                                                     }}
                                                                     className={`text-[10px] px-2 py-1 rounded ${theme === 'dark'
                                                                         ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
@@ -23774,7 +23776,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     onClick={() => {
                                                                         setActiveDropdown(null);
                                                                         if (nodeRunningItems.length === 0 && nodeQueueItems.length === 0) return;
-                                                                        if (confirm('确定终止当前节点所有生成并清空队列吗？')) clearNodeQueue(node.id, true);
+                                                                        if (confirm(t('确定终止当前节点所有生成并清空队列吗？'))) clearNodeQueue(node.id, true);
                                                                     }}
                                                                     className={`text-[10px] px-2 py-1 rounded ${theme === 'dark'
                                                                         ? 'bg-red-900/40 text-red-300 hover:bg-red-900/60'
@@ -23791,15 +23793,15 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             <div key={`${item.nodeId}-${item.shotId}-${idx}`} className={`text-[10px] flex items-center justify-between gap-2 ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600'}`}>
                                                                                 <span className="truncate max-w-[150px]">{item.projectTitle} · 镜头{item.sceneIndex}</span>
                                                                                 <div className="flex items-center gap-1 shrink-0">
-                                                                                    <span className="text-green-500">运行</span>
+                                                                                    <span className="text-green-500">{t('运行')}</span>
                                                                                     <button
                                                                                         onClick={() => {
-                                                                                            if (confirm('确定终止该生成任务吗？')) stopRunningShot(item.nodeId, item.shotId);
+                                                                                            if (confirm(t('确定终止该生成任务吗？'))) stopRunningShot(item.nodeId, item.shotId);
                                                                                         }}
                                                                                         className={`p-0.5 rounded ${theme === 'dark'
                                                                                             ? 'text-zinc-500 hover:text-red-300'
                                                                                             : 'text-zinc-400 hover:text-red-500'}`}
-                                                                                        title="终止任务"
+                                                                                        title={t('终止任务')}
                                                                                     >
                                                                                         <Trash2 size={10} />
                                                                                     </button>
@@ -23825,12 +23827,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     <span className="text-blue-400">{item.mode === 'image' ? '图' : '视'}</span>
                                                                                     <button
                                                                                         onClick={() => {
-                                                                                            if (confirm('确定移除该排队任务吗？')) removeQueuedBatchItem(item.nodeId, item.shotId);
+                                                                                            if (confirm(t('确定移除该排队任务吗？'))) removeQueuedBatchItem(item.nodeId, item.shotId);
                                                                                         }}
                                                                                         className={`p-0.5 rounded ${theme === 'dark'
                                                                                             ? 'text-zinc-500 hover:text-red-300'
                                                                                             : 'text-zinc-400 hover:text-red-500'}`}
-                                                                                        title="移除任务"
+                                                                                        title={t('移除任务')}
                                                                                     >
                                                                                         <Trash2 size={10} />
                                                                                     </button>
@@ -23893,7 +23895,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }}
                                                             className={`text-[10px] px-2 py-1 rounded transition-colors whitespace-nowrap ${theme === 'dark' ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600'}`}
                                                             onMouseDown={(e) => e.stopPropagation()}
-                                                            title={"全选/取消锁定（灰框勾选的不参与批量生成）"}
+                                                            title={t('全选/取消锁定（灰框勾选的不参与批量生成）')}
                                                         >
                                                             {(node.settings?.shots || []).every(s => s.outputEnabled) ? '取消' : '全选'}
                                                         </button>
@@ -23911,10 +23913,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }}
                                                             className={`text-[10px] px-2 py-1 rounded transition-colors flex items-center gap-1 whitespace-nowrap ${theme === 'dark' ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-500 hover:bg-blue-400 text-white'}`}
                                                             onMouseDown={(e) => e.stopPropagation()}
-                                                            title="暂定=全选输出（选中所有图片），重选=取消全部"
+                                                            title={t('暂定=全选输出（选中所有图片），重选=取消全部')}
                                                         >
                                                             <ImageIcon size={10} />
-                                                            <span>{(node.settings?.shots || []).some(s => s.selectedImageIndex >= 0) ? '重选' : '暂定'}</span>
+                                                            <span>{(node.settings?.shots || []).some(s => s.selectedImageIndex >= 0) ? t('重选') : t('暂定')}</span>
                                                         </button>
                                                     </>
                                                 ) : (
@@ -23928,7 +23930,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         }}
                                                         className={`text-[10px] px-2 py-1 rounded transition-colors whitespace-nowrap ${theme === 'dark' ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-600'}`}
                                                         onMouseDown={(e) => e.stopPropagation()}
-                                                        title={"全选/取消锁定"}
+                                                        title={t('全选/取消锁定')}
                                                     >
                                                         {(node.settings?.shots || []).every(s => s.outputEnabled) ? '取消' : '全选'}
                                                     </button>
@@ -23950,7 +23952,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <textarea
                                                     value={node.settings?.scriptText || ''}
                                                     onChange={(e) => updateNodeSettings(node.id, { scriptText: e.target.value })}
-                                                    placeholder="格式: #1 第一个镜头描述 #2 第二个镜头描述 ..."
+                                                    placeholder={t('格式: #1 第一个镜头描述 #2 第二个镜头描述 ...')}
                                                     className={`w-full h-24 p-2 text-xs rounded border resize-none overflow-y-auto custom-scrollbar ${theme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-200 placeholder-zinc-500' : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'}`}
                                                     onMouseDown={(e) => e.stopPropagation()}
                                                     onWheel={(e) => { e.stopPropagation(); }}
@@ -23990,7 +23992,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }
 
                                                             if (matches.length === 0) {
-                                                                alert('未检测到有效分镜。请使用格式: #1 描述 #2 描述');
+                                                                alert(t('未检测到有效分镜。请使用格式: #1 描述 #2 描述'));
                                                                 return;
                                                             }
 
@@ -24117,7 +24119,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         className="px-2 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 transition-colors flex items-center gap-1"
                                                         onMouseDown={(e) => e.stopPropagation()}
                                                         disabled={node.settings?.isGenerating}
-                                                        title="使用 AI 智能拆分脚本"
+                                                        title={t('使用 AI 智能拆分脚本')}
                                                     >
                                                         <Sparkles size={12} />
                                                         {node.settings?.isGenerating ? '拆分中...' : 'LLM拆分'}
@@ -24129,15 +24131,15 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             ? 'bg-blue-500 text-white'
                                                             : theme === 'dark' ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'}`}
                                                         onMouseDown={(e) => e.stopPropagation()}
-                                                        title="自定义 LLM 拆分 Prompt"
+                                                        title={t('自定义 LLM 拆分 Prompt')}
                                                     >
                                                         <Edit3 size={12} />
                                                     </button>
                                                     {/* V3.7.25: 说明文字（隐藏时显示） */}
                                                     {!node.settings?.showLlmPromptEditor && (
                                                         <div className={`flex flex-col text-[10px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                                                            <span>程序拆分: #1 #2 或换行</span>
-                                                            <span>LLM拆分: 左下角聊天窗口模型</span>
+                                                            <span>{t('程序拆分: #1 #2 或换行')}</span>
+                                                            <span>{t('LLM拆分: 左下角聊天窗口模型')}</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -24156,7 +24158,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 ? 'bg-zinc-800 text-zinc-200 border-zinc-700'
                                                                 : theme === 'solarized' ? 'bg-[#fdf6e3] text-zinc-800 border-[#eee8d5]' : 'bg-white text-zinc-800 border-zinc-300'} border`}
                                                             rows={3}
-                                                            placeholder="输入自定义 LLM 拆分 Prompt..."
+                                                            placeholder={t('输入自定义 LLM 拆分 Prompt...')}
                                                             onMouseDown={(e) => e.stopPropagation()}
                                                             onClick={(e) => e.stopPropagation()}
                                                             onKeyDown={(e) => e.stopPropagation()}
@@ -24200,7 +24202,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 });
                                                                 updateNodeSettings(node.id, { shots: newShots });
                                                             }}
-                                                            title="在此处插入新镜头"
+                                                            title={t('在此处插入新镜头')}
                                                         >
                                                             <div className="w-full h-[2px] bg-blue-500 opacity-0 group-hover/insert:opacity-100 transition-opacity" />
                                                             <div className="absolute w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-opacity shadow-sm scale-75 group-hover/insert:scale-100">
@@ -24290,7 +24292,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             <button
                                                                                                 onClick={(e) => { e.stopPropagation(); setLightboxItem({ url: imgUrl, type: 'image' }); }}
                                                                                                 className="absolute bottom-1 left-1 p-1 rounded-full bg-black/60 text-white hover:bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity z-30"
-                                                                                                title="预览图片"
+                                                                                                title={t('预览图片')}
                                                                                             >
                                                                                                 <Maximize2 size={10} />
                                                                                             </button>
@@ -24350,7 +24352,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 <button
                                                                                                     onClick={(e) => { e.stopPropagation(); setLightboxItem({ url: mainInputImg, type: 'image' }); }}
                                                                                                     className="absolute bottom-1 left-1 p-1 rounded-full bg-black/60 text-white hover:bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity z-30"
-                                                                                                    title="预览原图"
+                                                                                                    title={t('预览原图')}
                                                                                                 >
                                                                                                     <Maximize2 size={12} />
                                                                                                 </button>
@@ -24361,7 +24363,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     </div>
                                                                                                 )}
                                                                                                 {/* 删除按钮 */}
-                                                                                                <button onClick={(e) => { e.stopPropagation(); updateShot(node.id, shot.id, { image_url: '', image_filename: '', referenceImages: [] }); }} className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-30" title="删除"><X size={12} /></button>
+                                                                                                <button onClick={(e) => { e.stopPropagation(); updateShot(node.id, shot.id, { image_url: '', image_filename: '', referenceImages: [] }); }} className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-30" title={t('删除')}><X size={12} /></button>
                                                                                             </>
                                                                                         ) : (
                                                                                             <div className="flex flex-col items-center gap-1 text-zinc-500">
@@ -24387,7 +24389,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         <div
                                                                                             className={`absolute bottom-1 right-1 p-1 rounded bg-black/40 hover:bg-blue-500 text-white transition-colors cursor-pointer z-30 ${showMultiRef ? 'text-blue-400 bg-blue-500/30' : 'text-zinc-400'}`}
                                                                                             onClick={(e) => { e.stopPropagation(); updateShot(node.id, shot.id, { useMultiRef: !showMultiRef }); }}
-                                                                                            title="多图参考开关"
+                                                                                            title={t('多图参考开关')}
                                                                                         >
                                                                                             <LayoutGrid size={12} />
                                                                                         </div>
@@ -24600,7 +24602,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:border-zinc-600'
                                                                                             : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 hover:border-[#d7cfb2]' : 'bg-white border-zinc-300 text-zinc-800 hover:border-zinc-400'
                                                                                             }`}
-                                                                                        title="分辨率"
+                                                                                        title={t('分辨率')}
                                                                                     >
                                                                                         {resOptions.map((res) => (
                                                                                             <option key={res} value={res}>
@@ -24629,7 +24631,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:border-zinc-600'
                                                                                             : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 hover:border-[#d7cfb2]' : 'bg-white border-zinc-300 text-zinc-800 hover:border-zinc-400'
                                                                                             }`}
-                                                                                        title="分辨率"
+                                                                                        title={t('分辨率')}
                                                                                     >
                                                                                         {resOptions.map(res => (
                                                                                             <option key={res} value={res}>
@@ -24691,7 +24693,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 className="w-3 h-3 cursor-pointer"
                                                                                                 onMouseDown={e => e.stopPropagation()}
                                                                                             />
-                                                                                            <span>首尾帧</span>
+                                                                                            <span>{t('首尾帧')}</span>
                                                                                         </label>
                                                                                     )}
                                                                                     {supportsHD && (
@@ -24741,7 +24743,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             : 'text-zinc-800 placeholder:text-zinc-400'
                                                                             }`}
                                                                         value={shot.description || ''}
-                                                                        placeholder="画面描述..."
+                                                                        placeholder={t('画面描述...')}
                                                                         title={shot.description || ''} /* V3.5.20: Tooltip */
                                                                         onChange={(e) => updateShot(node.id, shot.id, { description: e.target.value })}
                                                                         onClick={(e) => {
@@ -24790,7 +24792,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         <textarea
                                                                             className="w-full bg-transparent outline-none resize-none placeholder:text-opacity-50 transition-all pr-8"
                                                                             value={shot.prompt || ''}
-                                                                            placeholder="等待生成提示词..."
+                                                                            placeholder={t('等待生成提示词...')}
                                                                             onChange={(e) => updateShot(node.id, shot.id, { prompt: e.target.value })}
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
@@ -24837,7 +24839,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     ? 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
                                                                                     : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200'
                                                                                     }`}
-                                                                                title="插入角色"
+                                                                                title={t('插入角色')}
                                                                             >
                                                                                 <Users size={12} />
                                                                             </button>
@@ -24980,13 +24982,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         )}
                                                                         <button
                                                                             onClick={() => {
-                                                                                if (confirm('确定要删除该镜头吗？')) deleteShot(node.id, shot.id);
+                                                                                if (confirm(t('确定要删除该镜头吗？'))) deleteShot(node.id, shot.id);
                                                                             }}
                                                                             className={`p-1.5 transition-colors ${theme === 'dark'
                                                                                 ? 'text-zinc-600 hover:text-red-500'
                                                                                 : 'text-zinc-400 hover:text-red-600'
                                                                                 }`}
-                                                                            title="删除镜头"
+                                                                            title={t('删除镜头')}
                                                                             onMouseDown={(e) => e.stopPropagation()}
                                                                         >
                                                                             <Trash2 size={16} />
@@ -25053,7 +25055,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 ? 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-800'
                                                                                 : 'text-zinc-400 hover:text-blue-500 hover:bg-zinc-100'
                                                                                 }`}
-                                                                            title="上移"
+                                                                            title={t('上移')}
                                                                             onMouseDown={(e) => e.stopPropagation()}
                                                                         >
                                                                             <ChevronUp size={16} />
@@ -25072,7 +25074,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 ? 'text-zinc-500 hover:text-blue-400 hover:bg-zinc-800'
                                                                                 : 'text-zinc-400 hover:text-blue-500 hover:bg-zinc-100'
                                                                                 }`}
-                                                                            title="下移"
+                                                                            title={t('下移')}
                                                                             onMouseDown={(e) => e.stopPropagation()}
                                                                         >
                                                                             <ChevronDown size={16} />
@@ -25232,7 +25234,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     });
                                                                                                 }}
                                                                                                 className="absolute bottom-0 left-0 p-0.5 rounded-tr bg-black/60 text-white hover:bg-blue-500 opacity-0 group-hover/main:opacity-100 transition-opacity z-10"
-                                                                                                title="预览原图"
+                                                                                                title={t('预览原图')}
                                                                                             >
                                                                                                 <Maximize2 size={10} />
                                                                                             </button>
@@ -25326,7 +25328,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                         });
                                                                                                     }}
                                                                                                     className="absolute bottom-0 left-0 p-0.5 rounded-tr bg-black/60 text-white hover:bg-blue-500 opacity-0 group-hover/cell:opacity-100 transition-opacity z-10"
-                                                                                                    title="预览原图"
+                                                                                                    title={t('预览原图')}
                                                                                                 >
                                                                                                     <Maximize2 size={8} />
                                                                                                 </button>
@@ -25451,7 +25453,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 >
                                     <div className="flex items-center gap-1.5">
                                         <Maximize2 size={13} className="text-blue-500" />
-                                        <span>预览窗口</span>
+                                        <span>{t('预览窗口')}</span>
                                     </div>
                                     <span className="text-[10px] text-zinc-500">
                                         {node.previewType === 'video' ? '视频预览' : '图片预览'}
@@ -25551,8 +25553,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     }`}
                                             >
                                                 <ImageIcon className="w-6 h-6 mb-1 text-zinc-400" />
-                                                <span>连接 AI 绘图 / AI 视频 节点</span>
-                                                <span>或从历史记录发送到此处进行预览</span>
+                                                <span>{t('连接 AI 绘图 / AI 视频 节点')}</span>
+                                                <span>{t('或从历史记录发送到此处进行预览')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -25651,7 +25653,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             {isGenerating ? (
                                                 <span>⏱ {elapsedSeconds.toFixed(1)}s</span>
                                             ) : (
-                                                <span>✓ 完成 {finalDuration}s</span>
+                                                <span>✓ {t('完成')} {finalDuration}s</span>
                                             )}
                                         </div>
                                     )}
@@ -25660,7 +25662,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             }`}
                                     >
                                         {node.type === 'gen-image' ? <Wand2 size={12} className="text-blue-400" /> : <Video size={12} className="text-purple-400" />}
-                                        <span>{node.type === 'gen-image' ? 'AI 绘图' : 'AI 视频'}</span>
+                                        <span>{node.type === 'gen-image' ? t('AI 绘图') : t('AI 视频')}</span>
                                     </div>
                                     {connectedImages.length > 0 && (
                                         <div
@@ -25745,7 +25747,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         : 'bg-purple-50 text-purple-600 border border-purple-200'
                                                         }`}>
                                                         <Eraser size={12} />
-                                                        <span>{hasMaskFromSource ? '已链接蒙版区域' : '已设置蒙版区域'}</span>
+                                                        <span>{hasMaskFromSource ? t('已链接蒙版区域') : t('已设置蒙版区域')}</span>
                                                     </div>
                                                 );
                                             }
@@ -25757,7 +25759,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     ? 'text-zinc-300 placeholder-zinc-600'
                                                     : 'text-zinc-800 placeholder-zinc-400'
                                                     }`}
-                                                placeholder="输入提示词..."
+                                                placeholder={t('输入提示词...')}
                                                 value={node.type === 'gen-image' ? (node.settings?.prompt || '') : (node.settings?.videoPrompt || '')}
                                                 onChange={(e) => updateNodeSettings(node.id, node.type === 'gen-image' ? { prompt: e.target.value } : { videoPrompt: e.target.value })}
                                                 onMouseDown={(e) => e.stopPropagation()}
@@ -25773,7 +25775,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                                                             : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200'
                                                             }`}
-                                                        title="插入角色"
+                                                        title={t('插入角色')}
                                                     >
                                                         <Users size={14} />
                                                     </button>
@@ -25894,7 +25896,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 onMouseDown={(e) => e.stopPropagation()}
                                             >
                                                 <div className={`text-[11px] font-semibold ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700'}`}>
-                                                    首尾帧
+                                                    {t('首尾帧')}
                                                 </div>
                                                 <div className={`text-[10px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>
                                                     第一张为首帧，第二张为尾帧（最多 2 张）
@@ -25904,7 +25906,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <div className="relative flex items-center gap-2">
                                                     <div
                                                         className={`input-point ${startFrame ? 'connected' : ''} ${connectingTarget === node.id && connectingInputType === 'veo_start' ? 'active' : ''}`}
-                                                        title="首帧输入"
+                                                        title={t('首帧输入')}
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
                                                             e.preventDefault();
@@ -25919,7 +25921,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     />
                                                     <div className="flex items-center justify-between flex-1 ml-2">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>首帧</span>
+                                                            <span className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>{t('首帧')}</span>
                                                             {startFrame && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
                                                         </div>
                                                         {startFrame ? (
@@ -25936,7 +25938,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <div className="relative flex items-center gap-2">
                                                     <div
                                                         className={`input-point ${endFrame ? 'connected' : ''} ${connectingTarget === node.id && connectingInputType === 'veo_end' ? 'active' : ''}`}
-                                                        title="尾帧输入"
+                                                        title={t('尾帧输入')}
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
                                                             e.preventDefault();
@@ -25951,7 +25953,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     />
                                                     <div className="flex items-center justify-between flex-1 ml-2">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>尾帧</span>
+                                                            <span className={`text-[10px] font-medium ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>{t('尾帧')}</span>
                                                             {endFrame && <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
                                                         </div>
                                                         {endFrame ? (
@@ -25980,7 +25982,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 {/* oref指令 */}
                                                 <div className="relative flex items-center gap-1.5" data-mj-oref="true">
                                                     <div className={`input-point ${orefConnected ? 'connected' : ''} ${connectingTarget === node.id && connectingInputType === 'oref' ? 'active' : ''}`}
-                                                        title="oref输入"
+                                                        title={t('oref输入')}
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
                                                             e.preventDefault();
@@ -26038,7 +26040,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 {/* sref指令 */}
                                                 <div className="relative flex items-center gap-1.5" data-mj-sref="true">
                                                     <div className={`input-point ${srefConnected ? 'connected' : ''} ${connectingTarget === node.id && connectingInputType === 'sref' ? 'active' : ''}`}
-                                                        title="sref输入"
+                                                        title={t('sref输入')}
                                                         onMouseDown={(e) => {
                                                             e.stopPropagation();
                                                             e.preventDefault();
@@ -26114,7 +26116,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         className={`px-2 py-0.5 rounded text-[10px] border ${theme === 'dark' ? 'border-red-500/50 text-red-400 hover:bg-red-500/10' : 'border-red-200 text-red-600 hover:bg-red-50'}`}
                                                                         onMouseDown={(e) => e.stopPropagation()}
                                                                     >
-                                                                        删除
+                                                                        {t('删除')}
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -26129,14 +26131,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 type="text"
                                                                 value={promptLibraryForm.name}
                                                                 onChange={(e) => setPromptLibraryForm((prev) => ({ ...prev, name: e.target.value }))}
-                                                                placeholder="自定义名称（例如：柔光人像）"
+                                                                placeholder={t('自定义名称（例如：柔光人像）')}
                                                                 className={`w-full px-2 py-1 text-[11px] rounded border ${theme === 'dark' ? 'bg-zinc-900 border-zinc-700 text-zinc-200 placeholder:text-zinc-600' : 'bg-white border-zinc-300 text-zinc-800 placeholder:text-zinc-400'}`}
                                                                 onMouseDown={(e) => e.stopPropagation()}
                                                             />
                                                             <textarea
                                                                 value={promptLibraryForm.prompt}
                                                                 onChange={(e) => setPromptLibraryForm((prev) => ({ ...prev, prompt: e.target.value }))}
-                                                                placeholder="输入提示词内容..."
+                                                                placeholder={t('输入提示词内容...')}
                                                                 className={`w-full min-h-[70px] px-2 py-1 text-[11px] rounded border resize-none custom-scrollbar ${theme === 'dark' ? 'bg-zinc-900 border-zinc-700 text-zinc-200 placeholder:text-zinc-600' : 'bg-white border-zinc-300 text-zinc-800 placeholder:text-zinc-400'}`}
                                                                 onMouseDown={(e) => e.stopPropagation()}
                                                             />
@@ -26608,7 +26610,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             className="w-3 h-3 cursor-pointer"
                                                                             onMouseDown={e => e.stopPropagation()}
                                                                         />
-                                                                        <span>首尾帧</span>
+                                                                        <span>{t('首尾帧')}</span>
                                                                     </label>
                                                                 );
                                                             })()}
@@ -26718,7 +26720,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 }}
                                 className={`ml-2 text-xs cursor-pointer hover:underline ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'
                                     }`}
-                                title="点击编辑项目名称"
+                                title={t('点击编辑项目名称')}
                             >
                                 {projectName}
                             </span>
@@ -26731,7 +26733,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     ? 'border-[#d7cfb2] text-[#586e75] hover:bg-[#fdf6e3]'
                                     : 'border-zinc-300 text-zinc-600 hover:bg-zinc-100'
                                 }`}
-                            title="新建空项目（清空当前内容）"
+                            title={t('新建空项目（清空当前内容）')}
                         >
                             <Plus size={12} />
                         </button>
@@ -26765,7 +26767,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             }
                         >
                             <Zap size={14} className={globalPerformanceMode !== 'off' ? 'fill-current' : ''} />
-                            <span>{globalPerformanceMode === 'ultra' ? '极致模式' : globalPerformanceMode === 'normal' ? '性能模式' : '性能模式'}</span>
+                            <span>{globalPerformanceMode === 'ultra' ? t('极致模式') : t('性能模式')}</span>
                         </button>
                         {/* 功能1：下载按钮 */}
                         <button
@@ -26776,10 +26778,10 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     ? 'bg-[#616161] border-[#525252] text-[#fdf6e3] hover:bg-[#555555]'
                                     : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200'
                                 }`}
-                            title="批量下载选中的图片/视频节点"
+                            title={t('批量下载选中的图片/视频节点')}
                         >
                             <Download size={14} />
-                            <span>下载</span>
+                            <span>{t('下载')}</span>
                         </button>
                         <button
                             onClick={handleToggleTheme}
@@ -26789,14 +26791,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     ? 'bg-[#616161] border-[#525252] text-[#fdf6e3] hover:bg-[#555555]'
                                     : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200'
                                 }`}
-                            title="切换主题"
+                            title={t('切换主题')}
                         >
                             {(() => {
                                 if (theme === 'light') {
                                     return (
                                         <>
                                             <Sun size={14} className="text-amber-400" />
-                                            <span>亮光</span>
+                                            <span>{t('亮光')}</span>
                                         </>
                                     );
                                 }
@@ -26804,14 +26806,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     return (
                                         <>
                                             <Sun size={14} className="text-yellow-600" />
-                                            <span>日光</span>
+                                            <span>{t('日光')}</span>
                                         </>
                                     );
                                 }
                                 return (
                                     <>
                                         <Moon size={14} className="text-blue-500" />
-                                        <span>暗光</span>
+                                        <span>{t('暗光')}</span>
                                     </>
                                 );
                             })()}
@@ -26832,7 +26834,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         ? 'bg-[#616161] border-[#525252] text-[#fdf6e3] hover:bg-[#555555]'
                                         : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200'
                                 }`}
-                            title="撤销 (Ctrl+Z)"
+                            title={t('撤销 (Ctrl+Z)')}
                         >
                             <RotateCcw size={14} />
                         </button>
@@ -26851,7 +26853,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         ? 'bg-[#616161] border-[#525252] text-[#fdf6e3] hover:bg-[#555555]'
                                         : 'bg-zinc-100 border-zinc-300 text-zinc-700 hover:bg-zinc-200'
                                 }`}
-                            title="重做 (Ctrl+Shift+Z)"
+                            title={t('重做 (Ctrl+Shift+Z)')}
                         >
                             <RotateCw size={14} />
                         </button>
@@ -26860,7 +26862,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             onClick={handleNewProject}
                             className={theme === 'solarized' ? '!bg-[#616161] !border !border-[#525252] !text-[#fdf6e3] hover:!bg-[#555555]' : ''}
                         >
-                            清空
+                            {t('清空')}
                         </Button>
                         <Button
                             variant="secondary"
@@ -26894,7 +26896,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
                                 : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200'
                                 }`}
-                            title="自动整理节点（对齐、排列、去除堆叠）"
+                            title={t('自动整理节点（对齐、排列、去除堆叠）')}
                         >
                             <Layout size={18} />
                         </button>
@@ -26931,7 +26933,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                     ? 'text-zinc-500 hover:text-zinc-300'
                                     : 'text-zinc-500 hover:text-zinc-800'
                                 }`}
-                            title="AI 对话"
+                            title={t('AI 对话')}
                         >
                             <MessageSquare size={18} />
                         </button>
@@ -26942,7 +26944,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
                                 : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200'
                                 }`}
-                            title="保存项目"
+                            title={t('保存项目')}
                         >
                             <Save size={18} />
                         </button>
@@ -26952,7 +26954,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
                                 : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200'
                                 }`}
-                            title="加载项目"
+                            title={t('加载项目')}
                         >
                             <FolderOpen size={18} />
                         </button>
@@ -26962,7 +26964,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
                                 : 'text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200'
                                 }`}
-                            title="导入工作流"
+                            title={t('导入工作流')}
                         >
                             <Download size={18} />
                         </button>
@@ -27043,7 +27045,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                                                 : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200'
                                             }`}
-                                        title="本地缓存设置"
+                                        title={t('本地缓存设置')}
                                     >
                                         <FolderOpen size={14} />
                                     </button>
@@ -27057,7 +27059,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                                                 : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200'
                                             }`}
-                                        title="全局队列"
+                                        title={t('全局队列')}
                                     >
                                         <Layers size={14} />
                                     </button>
@@ -27105,7 +27107,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                                             : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200'
                                             }`}
-                                        title="批量管理"
+                                        title={t('批量管理')}
                                     >
                                         <LayoutGrid size={14} />
                                     </button>
@@ -27188,7 +27190,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         }`}>
                                         <div className="flex items-center gap-2">
                                             <span className={`inline-block w-2 h-2 rounded-full ${localCacheServerConnected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                            <span>{localCacheServerConnected ? '本地缓存已连接 - 图片将优先从本地读取' : '本地缓存未连接'}</span>
+                                            <span>{localCacheServerConnected ? t('本地缓存已连接 - 图片将优先从本地读取') : t('本地缓存未连接')}</span>
                                         </div>
                                         <button
                                             onClick={() => {
@@ -27199,7 +27201,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 ? 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
                                                 : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200'
                                                 }`}
-                                            title="关闭本地缓存"
+                                            title={t('关闭本地缓存')}
                                         >
                                             <X size={10} />
                                         </button>
@@ -27210,7 +27212,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 {historyQueuePanelOpen && (
                                     <div className={`rounded-lg border p-3 space-y-3 ${theme === 'dark' ? 'bg-zinc-900/60 border-zinc-800' : 'bg-white border-zinc-200'}`}>
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className={`text-xs font-semibold ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700'}`}>全局队列</span>
+                                            <span className={`text-xs font-semibold ${theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700'}`}>{t('全局队列')}</span>
                                             <div className="flex items-center gap-1">
                                                 <button
                                                     onClick={() => setBatchQueueMode('pipeline')}
@@ -27305,7 +27307,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         <button
                                                             onClick={() => {
                                                                 if (batchQueue.length === 0) return;
-                                                                if (confirm('确定清空排队任务吗？')) clearBatchQueue(false);
+                                                                if (confirm(t('确定清空排队任务吗？'))) clearBatchQueue(false);
                                                             }}
                                                             className={`text-[10px] px-2 py-1 rounded ${theme === 'dark'
                                                                 ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
@@ -27316,7 +27318,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         <button
                                                             onClick={() => {
                                                                 if (batchRunningItems.length === 0 && batchQueue.length === 0) return;
-                                                                if (confirm('确定终止所有生成并清空队列吗？')) clearBatchQueue(true);
+                                                                if (confirm(t('确定终止所有生成并清空队列吗？'))) clearBatchQueue(true);
                                                             }}
                                                             className={`text-[10px] px-2 py-1 rounded ${theme === 'dark'
                                                                 ? 'bg-red-900/40 text-red-300 hover:bg-red-900/60'
@@ -27361,12 +27363,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             {group.queued.length > 0 && (
                                                                                 <button
                                                                                     onClick={() => {
-                                                                                        if (confirm('确定移除该任务的排队内容吗？')) removeQueuedBatchGroup(group.id);
+                                                                                        if (confirm(t('确定移除该任务的排队内容吗？'))) removeQueuedBatchGroup(group.id);
                                                                                     }}
                                                                                     className={`p-1 rounded ${theme === 'dark'
                                                                                         ? 'text-zinc-500 hover:text-red-300'
                                                                                         : 'text-zinc-400 hover:text-red-500'}`}
-                                                                                    title="移除任务排队"
+                                                                                    title={t('移除任务排队')}
                                                                                 >
                                                                                     <Trash2 size={12} />
                                                                                 </button>
@@ -27393,9 +27395,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             <button
                                                                                                 onClick={() => {
                                                                                                     if (item.status === 'running') {
-                                                                                                        if (confirm('确定终止该生成任务吗？')) stopRunningShot(item.nodeId, item.shotId);
+                                                                                                        if (confirm(t('确定终止该生成任务吗？'))) stopRunningShot(item.nodeId, item.shotId);
                                                                                                     } else {
-                                                                                                        if (confirm('确定移除该排队任务吗？')) removeQueuedBatchItem(item.nodeId, item.shotId);
+                                                                                                        if (confirm(t('确定移除该排队任务吗？'))) removeQueuedBatchItem(item.nodeId, item.shotId);
                                                                                                     }
                                                                                                 }}
                                                                                                 className={`p-0.5 rounded ${theme === 'dark'
@@ -27439,7 +27441,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 e.currentTarget.blur();
                                                             }
                                                         }}
-                                                        placeholder="默认使用 history"
+                                                        placeholder={t('默认使用 history')}
                                                         className={`flex-1 text-xs border rounded px-2 py-1.5 outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-300 placeholder-zinc-600' : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'}`}
                                                     />
                                                     <button
@@ -27466,7 +27468,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 e.currentTarget.blur();
                                                             }
                                                         }}
-                                                        placeholder="默认使用 history"
+                                                        placeholder={t('默认使用 history')}
                                                         className={`flex-1 text-xs border rounded px-2 py-1.5 outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-zinc-800 border-zinc-700 text-zinc-300 placeholder-zinc-600' : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'}`}
                                                     />
                                                     <button
@@ -27853,7 +27855,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }
                                                         }}
                                                         className="absolute top-1 right-1 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
-                                                        title="删除角色"
+                                                        title={t('删除角色')}
                                                     >
                                                         <Trash2 size={12} />
                                                     </button>
@@ -27865,7 +27867,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         <LinkIcon
                                                             size={12}
                                                             className="text-green-500 shrink-0"
-                                                            title="Sora 2 已同步"
+                                                            title={t('Sora 2 已同步')}
                                                         />
                                                     </p>
                                                 </div>
@@ -27947,7 +27949,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 type="text"
                                                 value={createCharacterVideoUrl}
                                                 onChange={(e) => setCreateCharacterVideoUrl(e.target.value)}
-                                                placeholder="输入视频 URL..."
+                                                placeholder={t('输入视频 URL...')}
                                                 className={`w-full px-3 py-2 text-xs rounded border outline-none ${theme === 'dark'
                                                     ? 'bg-zinc-900 border-zinc-700 text-zinc-200 placeholder-zinc-600'
                                                     : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -27976,7 +27978,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800' : 'bg-white border-zinc-300 text-zinc-800'
                                                     }`}
                                             >
-                                                <option value="">选择历史记录中的视频...</option>
+                                                <option value="">{t('选择历史记录中的视频...')}</option>
                                                 {history.filter(h => h.type === 'video' && h.status === 'completed' && (h.url || h.localCacheUrl || h.originalUrl)).map(item => (
                                                     <option key={item.id} value={item.id}>
                                                         {item.prompt?.slice(0, 50) || 'Untitled'} - {item.time}
@@ -28075,7 +28077,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             type="text"
                                             value={createCharacterEndpoint}
                                             onChange={(e) => setCreateCharacterEndpoint(e.target.value)}
-                                            placeholder="例如: https://your-domain.com/sora/v1/characters"
+                                            placeholder={t('例如: https://your-domain.com/sora/v1/characters')}
                                             className={`w-full px-3 py-2 text-xs rounded border outline-none font-mono ${theme === 'dark'
                                                 ? 'bg-zinc-900 border-zinc-700 text-zinc-200 placeholder-zinc-600'
                                                 : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5] text-zinc-800 placeholder-zinc-400' : 'bg-white border-zinc-300 text-zinc-800 placeholder-zinc-400'
@@ -28106,20 +28108,20 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                                                 }`}
                                         >
-                                            取消
+                                            {t('取消')}
                                         </button>
                                         <button
                                             onClick={async () => {
                                                 if (createCharacterVideoSourceType === 'url' && !createCharacterVideoUrl.trim()) {
-                                                    alert('请输入视频 URL');
+                                                    alert(t('请输入视频 URL'));
                                                     return;
                                                 }
                                                 if (createCharacterVideoSourceType === 'history' && !createCharacterSelectedTaskId) {
-                                                    alert('请选择历史记录中的视频');
+                                                    alert(t('请选择历史记录中的视频'));
                                                     return;
                                                 }
                                                 if (createCharacterEndSecond - createCharacterStartSecond < 1 || createCharacterEndSecond - createCharacterStartSecond > 3) {
-                                                    alert('时间范围必须在 1-3 秒之间');
+                                                    alert(t('时间范围必须在 1-3 秒之间'));
                                                     return;
                                                 }
                                                 setCreateCharacterSubmitting(true);
@@ -28328,7 +28330,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             ? 'text-zinc-400 hover:text-white hover:bg-zinc-800'
                                             : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'
                                             }`}
-                                        title="新对话"
+                                        title={t('新对话')}
                                     >
                                         <Plus size={16} />
                                     </button>
@@ -28626,7 +28628,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             ? 'text-zinc-400 hover:text-white'
                                             : 'text-zinc-500 hover:text-zinc-900'
                                             }`}
-                                        title="上传文件"
+                                        title={t('上传文件')}
                                     >
                                         <Paperclip size={18} />
                                         <input type="file" multiple className="hidden" onChange={handleChatFileUpload} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.js,.py,.html,.css,.json,.csv" />
@@ -28638,7 +28640,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
                                         onFocus={() => { setIsChatInputFocused(true); markInteraction('chat'); }}
                                         onBlur={() => setIsChatInputFocused(false)}
-                                        placeholder="发送消息..."
+                                        placeholder={t('发送消息...')}
                                         className={`w-full bg-transparent text-sm resize-none outline-none max-h-32 py-2 px-1 custom-scrollbar ${theme === 'dark'
                                             ? 'text-white placeholder-zinc-500'
                                             : 'text-zinc-800 placeholder-zinc-400'
@@ -28675,31 +28677,31 @@ ${inputText.substring(0, 15000)} ... (截断)
                             >
                                 <div className="p-1">
                                     {[
-                                        { type: 'input-image', label: '图片输入' },
-                                        { type: 'text-node', label: '文字节点' },
-                                        { type: 'novel-input', label: '小说输入' },
+                                        { type: 'input-image', label: t('图片输入') },
+                                        { type: 'text-node', label: t('文字节点') },
+                                        { type: 'novel-input', label: t('小说输入') },
                                         {
                                             type: 'extract-characters-scenes',
-                                            label: '提取角色和场景',
+                                            label: t('提取角色和场景'),
                                             children: [
-                                                { type: 'character-description', label: '角色描述' },
-                                                { type: 'scene-description', label: '场景描述' },
-                                                { type: 'generate-character-image', label: '生成角色图片' },
-                                                { type: 'generate-scene-image', label: '生成场景图片' },
-                                                { type: 'generate-character-video', label: '生成角色视频' },
-                                                { type: 'generate-scene-video', label: '生成场景视频' },
-                                                { type: 'create-character', label: '创建角色' },
-                                                { type: 'create-scene', label: '创建场景' }
+                                                { type: 'character-description', label: t('角色描述') },
+                                                { type: 'scene-description', label: t('场景描述') },
+                                                { type: 'generate-character-image', label: t('生成角色图片') },
+                                                { type: 'generate-scene-image', label: t('生成场景图片') },
+                                                { type: 'generate-character-video', label: t('生成角色视频') },
+                                                { type: 'generate-scene-video', label: t('生成场景视频') },
+                                                { type: 'create-character', label: t('创建角色') },
+                                                { type: 'create-scene', label: t('创建场景') }
                                             ]
                                         },
-                                        { type: 'video-input', label: '视频输入 / 关键帧整理' },
-                                        { type: 'video-analyze', label: '视频拆解 / 提示词反推' },
-                                        { type: 'storyboard-node', label: '智能分镜表' },
-                                        { type: 'gen-image', label: 'AI 绘图' },
-                                        { type: 'gen-video', label: 'AI 视频' },
-                                        { type: 'image-compare', label: '图像对比' },
-                                        { type: 'preview', label: '预览窗口' },
-                                        { type: 'local-save', label: '保存到本地' }
+                                        { type: 'video-input', label: t('视频输入 / 关键帧整理') },
+                                        { type: 'video-analyze', label: t('视频拆解 / 提示词反推') },
+                                        { type: 'storyboard-node', label: t('智能分镜表') },
+                                        { type: 'gen-image', label: t('AI 绘图') },
+                                        { type: 'gen-video', label: t('AI 视频') },
+                                        { type: 'image-compare', label: t('图像对比') },
+                                        { type: 'preview', label: t('预览窗口') },
+                                        { type: 'local-save', label: t('保存到本地') }
                                     ].map(item => (
                                         <div key={item.type}>
                                             {item.children ? (
@@ -28727,7 +28729,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 setContextMenuExpanded(prev => !prev);
                                                             }}
                                                             onMouseEnter={() => setContextMenuExpanded(true)}
-                                                            title="展开子目录"
+                                                            title={t('展开子目录')}
                                                         >
                                                             <ChevronRight size={12} className="transition-transform" />
                                                         </button>
@@ -28807,7 +28809,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             e.stopPropagation();
                                             setHistorySendMenuOpen(prev => !prev);
                                         }}
-                                        title="展开发送到"
+                                        title={t('展开发送到')}
                                     >
                                         <ChevronRight size={12} className={`transition-transform ${historySendMenuOpen ? 'rotate-90' : ''}`} />
                                     </button>
@@ -28895,7 +28897,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                             window.URL.revokeObjectURL(blobUrl);
                                         } catch (err) {
                                             console.error('下载失败:', err);
-                                            alert('下载失败，请重试');
+                                            alert(t('下载失败，请重试'));
                                         }
                                         setHistoryContextMenu({ visible: false, x: 0, y: 0, worldX: 0, worldY: 0, item: null });
                                     }}
@@ -29032,7 +29034,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         closePreviewContextMenu();
                                     }}
                                 >
-                                    <Maximize2 size={14} className="text-green-500" /> 预览原图
+                                    <Maximize2 size={14} className="text-green-500" /> {t('预览原图')}
                                 </button>
                                 <button
                                     className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${theme === 'dark'
@@ -29095,7 +29097,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                         closePreviewContextMenu();
                                     }}
                                 >
-                                    <Download size={14} className="text-cyan-500" /> 下载
+                                    <Download size={14} className="text-cyan-500" /> {t('下载')}
                                 </button>
                             </div>
                         )}
@@ -29254,7 +29256,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             }}
                         />
 
-                        <Modal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} title="模型接口配置" theme={theme}>
+                        <Modal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} title={t('模型接口配置')} theme={theme}>
                             <div className="px-4 pt-3">
                                 <div className={`inline-flex rounded-md border ${theme === 'dark'
                                     ? 'border-zinc-800 bg-[#18181b]'
@@ -29320,7 +29322,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         ? 'bg-zinc-900 border-zinc-800 text-zinc-300'
                                                         : 'bg-white border-zinc-300 text-zinc-900'
                                                         }`}
-                                                    placeholder="如果不想每个模型单独填 Key，可以在这里填一个全局 Key"
+                                                    placeholder={t('如果不想每个模型单独填 Key，可以在这里填一个全局 Key')}
                                                 />
                                             </div>
 
@@ -29559,7 +29561,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     // 直接替换，不合并
                                                                     setApiConfigs(migratedConfigs);
                                                                 }
-                                                                alert('API 配置导入成功！');
+                                                                alert(t('API 配置导入成功！'));
                                                             } catch (err) {
                                                                 alert('导入失败: ' + err.message);
                                                             }
@@ -29592,7 +29594,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     onClick={() => {
                                                         setApiBlacklist({});
                                                         apiBlacklistRef.current = {};
-                                                        alert('黑名单已清空');
+                                                        alert(t('黑名单已清空'));
                                                     }}
                                                     className={`px-2 py-1.5 text-[10px] rounded flex items-center justify-center gap-1 transition-colors ${theme === 'dark'
                                                         ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/30'
@@ -29604,7 +29606,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <button
                                                     onClick={() => {
                                                         setApiSuspendList({});
-                                                        alert('暂停列表已清空');
+                                                        alert(t('暂停列表已清空'));
                                                     }}
                                                     className={`px-2 py-1.5 text-[10px] rounded flex items-center justify-center gap-1 transition-colors ${theme === 'dark'
                                                         ? 'bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-500/30'
@@ -29616,7 +29618,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 <button
                                                     onClick={() => {
                                                         error1006WindowRef.current = [];
-                                                        alert('熔断已重置');
+                                                        alert(t('熔断已重置'));
                                                     }}
                                                     className={`px-2 py-1.5 text-[10px] rounded flex items-center justify-center gap-1 transition-colors ${theme === 'dark'
                                                         ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/30'
@@ -29705,7 +29707,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }}
                                                             className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded"
                                                         >
-                                                            删除
+                                                            {t('删除')}
                                                         </button>
                                                         <button
                                                             onClick={(e) => {
@@ -29714,7 +29716,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             }}
                                                             className={`text-xs px-2 py-1 rounded ${theme === 'dark' ? 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-700'}`}
                                                         >
-                                                            取消
+                                                            {t('取消')}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -29773,7 +29775,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         setEditingProvider({ key: providerKey, tempName: group.name });
                                                                     }}
                                                                     className={`p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors opacity-0 group-hover:opacity-100`}
-                                                                    title="修改名称"
+                                                                    title={t('修改名称')}
                                                                 >
                                                                     <Edit2 size={12} className={theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'} />
                                                                 </button>
@@ -29783,7 +29785,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         setDeletingProviderKey(providerKey);
                                                                     }}
                                                                     className={`p-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors opacity-0 group-hover:opacity-100`}
-                                                                    title="删除供应商"
+                                                                    title={t('删除供应商')}
                                                                 >
                                                                     <Trash2 size={12} className={theme === 'dark' ? 'text-zinc-400 hover:text-red-400' : 'text-zinc-500 hover:text-red-500'} />
                                                                 </button>
@@ -29955,7 +29957,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 className={`text-[9px] px-1 py-0.5 rounded cursor-pointer outline-none min-w-[120px] ${theme === 'dark' ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-zinc-200 text-zinc-500 hover:bg-zinc-300'}`}
                                                                                 disabled={!isEditing}
                                                                             >
-                                                                                <option value="">不引用模型库</option>
+                                                                                <option value="">{t('不引用模型库')}</option>
                                                                                 {modelLibrary.map((entry) => (
                                                                                     <option key={entry.id} value={entry.id}>{entry.displayName || entry.id}</option>
                                                                                 ))}
@@ -29966,7 +29968,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 className={`text-[9px] px-1 py-0.5 rounded cursor-pointer outline-none ${theme === 'dark' ? 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700' : 'bg-zinc-200 text-zinc-500 hover:bg-zinc-300'}`}
                                                                                 disabled={!isEditing || !!api.libraryId}
                                                                             >
-                                                                                <option value="">跟随 Provider</option>
+                                                                                <option value="">{t('跟随 Provider')}</option>
                                                                                 <option value="openai">OpenAI</option>
                                                                                 <option value="gemini">Gemini</option>
                                                                                 <option value="modelscope">ModelScope</option>
@@ -29976,7 +29978,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             <button
                                                                                 onClick={() => setApiModelEditing(api._uid, !isEditing)}
                                                                                 className={`px-1.5 py-0.5 rounded text-[9px] ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                title={isEditing ? '完成编辑' : '编辑'}
+                                                                                title={isEditing ? t('完成编辑') : t('编辑')}
                                                                             >
                                                                                 {isEditing ? <Check size={10} /> : <Pencil size={10} />}
                                                                             </button>
@@ -29993,9 +29995,9 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         </div>
                                                                     </div>
                                                                     <div className={`flex flex-wrap items-center gap-2 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                                                                        <span>模型库：{api.libraryId ? libraryLabel : '未引用'}</span>
-                                                                        <span>API模型：{api.modelName || api.id}</span>
-                                                                        <span>接口：{resolvedApiType}</span>
+                                                                        <span>{t('模型库：')}{api.libraryId ? libraryLabel : t('未引用')}</span>
+                                                                        <span>{t('API模型：')}{api.modelName || api.id}</span>
+                                                                        <span>{t('接口：')}{resolvedApiType}</span>
                                                                     </div>
                                                                 </div>
                                                             );
@@ -30016,8 +30018,8 @@ ${inputText.substring(0, 15000)} ... (截断)
                                 <div className="p-4 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <div className={`text-xs font-medium ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>模型库</div>
-                                            <p className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>统一维护模型能力与限制，供应商模型可直接引用。</p>
+                                            <div className={`text-xs font-medium ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>{t('模型库')}</div>
+                                            <p className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>{t('统一维护模型能力与限制，供应商模型可直接引用。')}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button
@@ -30029,7 +30031,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     }
                                                 }}
                                                 className={`p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}
-                                                title={hasExpandedLibraryModels ? '全部折叠' : '全部展开'}
+                                                title={hasExpandedLibraryModels ? t('全部折叠') : t('全部展开')}
                                             >
                                                 <ChevronsUp size={14} className={`transition-transform ${!hasExpandedLibraryModels ? 'rotate-180' : ''}`} />
                                             </button>
@@ -30037,7 +30039,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                 onClick={addModelLibraryEntry}
                                                 className={`text-[10px] px-2 py-1 rounded flex items-center gap-1 ${theme === 'dark' ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300'}`}
                                             >
-                                                <Plus size={10} /> 添加模型
+                                                <Plus size={10} /> {t('添加模型')}
                                             </button>
                                         </div>
                                     </div>
@@ -30182,35 +30184,35 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 </div>
                                                             </div>
                                                             <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                                                                系统调用模型ID：{entry.modelName || entry.id}
+                                                                {t('系统调用模型ID：')}{entry.modelName || entry.id}
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1">
                                                             <button
                                                                 onClick={() => toggleLibraryPreview(entry.id)}
                                                                 className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                title={isPreviewOpen ? '隐藏请求预览' : '查看请求预览'}
+                                                                title={isPreviewOpen ? t('隐藏请求预览') : t('查看请求预览')}
                                                             >
                                                                 <Code size={12} className={isPreviewOpen ? 'text-blue-500' : ''} />
                                                             </button>
                                                             <button
                                                                 onClick={() => toggleLibraryModelCollapse(entry.id)}
                                                                 className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                title={isCollapsed ? '展开' : '折叠'}
+                                                                title={isCollapsed ? t('展开') : t('折叠')}
                                                             >
                                                                 <ChevronDown size={12} className={`transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
                                                             </button>
                                                             <button
                                                                 onClick={() => setLibraryModelEditing(entry.id, !isEditing)}
                                                                 className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                title={isEditing ? '完成编辑' : '编辑'}
+                                                                title={isEditing ? t('完成编辑') : t('编辑')}
                                                             >
                                                                 {isEditing ? <Check size={12} /> : <Pencil size={12} />}
                                                             </button>
                                                             <button
                                                                 onClick={() => deleteModelLibraryEntry(entry.id)}
                                                                 className={`p-1 ${theme === 'dark' ? 'text-zinc-500 hover:text-red-400' : 'text-zinc-400 hover:text-red-500'}`}
-                                                                title="删除"
+                                                                title={t('删除')}
                                                             >
                                                                 <Trash2 size={12} />
                                                             </button>
@@ -30221,27 +30223,27 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         <>
                                                             <div className="grid grid-cols-12 gap-2 items-end">
                                                                 <div className="col-span-5 space-y-1">
-                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>显示名（仅展示）</label>
+                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('显示名（仅展示）')}</label>
                                                                     <input
                                                                         className={`w-full text-xs rounded px-2 py-1 border outline-none ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-zinc-300 text-zinc-900'}`}
                                                                         value={entry.displayName || ''}
                                                                         onChange={(e) => updateModelLibraryEntry(entry.id, { displayName: e.target.value })}
-                                                                        placeholder="例如：香蕉"
+                                                                        placeholder={t('例如：香蕉')}
                                                                         disabled={!isEditing}
                                                                     />
                                                                 </div>
                                                                 <div className="col-span-5 space-y-1">
-                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>模型ID（系统调用）</label>
+                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('模型ID（系统调用）')}</label>
                                                                     <input
                                                                         className={`w-full text-xs rounded px-2 py-1 border outline-none ${theme === 'dark' ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-white border-zinc-300 text-zinc-900'}`}
                                                                         value={entry.modelName || ''}
                                                                         onChange={(e) => updateModelLibraryEntry(entry.id, { modelName: e.target.value })}
-                                                                        placeholder="例如：gemini-3-pro-image-preview"
+                                                                        placeholder={t('例如：gemini-3-pro-image-preview')}
                                                                         disabled={!isEditing}
                                                                     />
                                                                 </div>
                                                                 <div className="col-span-2 space-y-1">
-                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>接口类型</label>
+                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('接口类型')}</label>
                                                                     <select
                                                                         value={entry.apiType || 'openai'}
                                                                         onChange={(e) => updateModelLibraryEntry(entry.id, { apiType: e.target.value })}
@@ -30259,7 +30261,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 <div className="grid grid-cols-12 gap-2">
                                                                     <div className="col-span-6">
                                                                         <TagListEditor
-                                                                            label="图片比例"
+                                                                            label={t('图片比例')}
                                                                             values={ratioValues}
                                                                             onChange={(values) => {
                                                                                 const nextNotes = { ...ratioNotes };
@@ -30268,11 +30270,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 });
                                                                                 updateModelLibraryEntry(entry.id, { ratioLimits: values, ratioNotes: nextNotes });
                                                                             }}
-                                                                            placeholder="例：1:1,16:9"
+                                                                            placeholder={t('例：1:1,16:9')}
                                                                             disabled={!isEditing}
                                                                             inputDisabled={!isEditing || ratioAll}
                                                                             theme={theme}
-                                                                            allowAllLabel="全比例"
+                                                                            allowAllLabel={t('全比例')}
                                                                             allowAll={ratioAll}
                                                                             onToggleAll={(checked) => updateModelLibraryEntry(entry.id, { ratioLimits: checked ? null : [] })}
                                                                             formatItem={(value) => getValueLabelWithNotes(value, ratioNotesEnabled, ratioNotes)}
@@ -30280,7 +30282,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {ratioValues.length > 0 && (
                                                                             <div className="mt-1 space-y-1">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                         <input
                                                                                             type="checkbox"
@@ -30288,13 +30290,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryEntry(entry.id, { ratioNotesEnabled: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>启用</span>
+                                                                                        <span>{t('启用')}</span>
                                                                                     </label>
-                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                     <button
                                                                                         onClick={() => toggleLibraryNotesCollapsed(entry.id, 'ratio')}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                        title={isLibraryNotesCollapsed(entry.id, 'ratio') ? '展开提示' : '折叠提示'}
+                                                                                        title={isLibraryNotesCollapsed(entry.id, 'ratio') ? t('展开提示') : t('折叠提示')}
                                                                                     >
                                                                                         <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, 'ratio') ? '' : 'rotate-180'}`} />
                                                                                     </button>
@@ -30314,7 +30316,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 }
                                                                                                 updateModelLibraryEntry(entry.id, { ratioNotes: nextNotes });
                                                                                             }}
-                                                                                            placeholder="例：1:1 / 竖屏"
+                                                                                            placeholder={t('例：1:1 / 竖屏')}
                                                                                             disabled={!isEditing}
                                                                                             className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30328,7 +30330,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     </div>
                                                                     <div className="col-span-6">
                                                                         <TagListEditor
-                                                                            label="图片分辨率"
+                                                                            label={t('图片分辨率')}
                                                                             values={resolutionValues}
                                                                             onChange={(values) => {
                                                                                 const nextNotes = { ...resolutionNotes };
@@ -30337,7 +30339,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 });
                                                                                 updateModelLibraryEntry(entry.id, { resolutionLimits: values, resolutionNotes: nextNotes });
                                                                             }}
-                                                                            placeholder="例：1K,2K,4K"
+                                                                            placeholder={t('例：1K,2K,4K')}
                                                                             disabled={!isEditing}
                                                                             theme={theme}
                                                                             normalizeItem={(value) => normalizeResolutionOption(value)}
@@ -30346,7 +30348,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {resolutionValues.length > 0 && (
                                                                             <div className="mt-1 space-y-1">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                         <input
                                                                                             type="checkbox"
@@ -30354,13 +30356,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryEntry(entry.id, { resolutionNotesEnabled: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>启用</span>
+                                                                                        <span>{t('启用')}</span>
                                                                                     </label>
-                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                     <button
                                                                                         onClick={() => toggleLibraryNotesCollapsed(entry.id, 'resolution')}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                        title={isLibraryNotesCollapsed(entry.id, 'resolution') ? '展开提示' : '折叠提示'}
+                                                                                        title={isLibraryNotesCollapsed(entry.id, 'resolution') ? t('展开提示') : t('折叠提示')}
                                                                                     >
                                                                                         <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, 'resolution') ? '' : 'rotate-180'}`} />
                                                                                     </button>
@@ -30380,7 +30382,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 }
                                                                                                 updateModelLibraryEntry(entry.id, { resolutionNotes: nextNotes });
                                                                                             }}
-                                                                                            placeholder="例：1:1 / 高清"
+                                                                                            placeholder={t('例：1:1 / 高清')}
                                                                                             disabled={!isEditing}
                                                                                             className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30399,7 +30401,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 <div className="grid grid-cols-12 gap-2">
                                                                     <div className="col-span-4">
                                                                         <TagListEditor
-                                                                            label="视频比例"
+                                                                            label={t('视频比例')}
                                                                             values={ratioValues}
                                                                             onChange={(values) => {
                                                                                 const nextNotes = { ...ratioNotes };
@@ -30408,11 +30410,11 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 });
                                                                                 updateModelLibraryEntry(entry.id, { ratioLimits: values, ratioNotes: nextNotes });
                                                                             }}
-                                                                            placeholder="例：16:9,9:16"
+                                                                            placeholder={t('例：16:9,9:16')}
                                                                             disabled={!isEditing}
                                                                             inputDisabled={!isEditing || ratioAll}
                                                                             theme={theme}
-                                                                            allowAllLabel="全比例"
+                                                                            allowAllLabel={t('全比例')}
                                                                             allowAll={ratioAll}
                                                                             onToggleAll={(checked) => updateModelLibraryEntry(entry.id, { ratioLimits: checked ? null : [] })}
                                                                             formatItem={(value) => getValueLabelWithNotes(value, ratioNotesEnabled, ratioNotes)}
@@ -30420,7 +30422,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {ratioValues.length > 0 && (
                                                                             <div className="mt-1 space-y-1">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                         <input
                                                                                             type="checkbox"
@@ -30428,13 +30430,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryEntry(entry.id, { ratioNotesEnabled: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>启用</span>
+                                                                                        <span>{t('启用')}</span>
                                                                                     </label>
-                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                     <button
                                                                                         onClick={() => toggleLibraryNotesCollapsed(entry.id, 'ratio')}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                        title={isLibraryNotesCollapsed(entry.id, 'ratio') ? '展开提示' : '折叠提示'}
+                                                                                        title={isLibraryNotesCollapsed(entry.id, 'ratio') ? t('展开提示') : t('折叠提示')}
                                                                                     >
                                                                                         <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, 'ratio') ? '' : 'rotate-180'}`} />
                                                                                     </button>
@@ -30454,7 +30456,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 }
                                                                                                 updateModelLibraryEntry(entry.id, { ratioNotes: nextNotes });
                                                                                             }}
-                                                                                            placeholder="例：16:9 / 横屏"
+                                                                                            placeholder={t('例：16:9 / 横屏')}
                                                                                             disabled={!isEditing}
                                                                                             className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30468,7 +30470,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     </div>
                                                                     <div className="col-span-4">
                                                                         <TagListEditor
-                                                                            label="视频时长"
+                                                                            label={t('视频时长')}
                                                                             values={durationValues}
                                                                             onChange={(values) => {
                                                                                 const nextNotes = { ...durationNotes };
@@ -30477,7 +30479,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 });
                                                                                 updateModelLibraryEntry(entry.id, { durations: values, durationNotes: nextNotes });
                                                                             }}
-                                                                            placeholder="例：5s,10s"
+                                                                            placeholder={t('例：5s,10s')}
                                                                             disabled={!isEditing}
                                                                             theme={theme}
                                                                             normalizeItem={(value) => {
@@ -30489,7 +30491,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {durationValues.length > 0 && (
                                                                             <div className="mt-1 space-y-1">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                         <input
                                                                                             type="checkbox"
@@ -30497,13 +30499,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryEntry(entry.id, { durationNotesEnabled: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>启用</span>
+                                                                                        <span>{t('启用')}</span>
                                                                                     </label>
-                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                     <button
                                                                                         onClick={() => toggleLibraryNotesCollapsed(entry.id, 'duration')}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                        title={isLibraryNotesCollapsed(entry.id, 'duration') ? '展开提示' : '折叠提示'}
+                                                                                        title={isLibraryNotesCollapsed(entry.id, 'duration') ? t('展开提示') : t('折叠提示')}
                                                                                     >
                                                                                         <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, 'duration') ? '' : 'rotate-180'}`} />
                                                                                     </button>
@@ -30523,7 +30525,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 }
                                                                                                 updateModelLibraryEntry(entry.id, { durationNotes: nextNotes });
                                                                                             }}
-                                                                                            placeholder="例：5s / 快速"
+                                                                                            placeholder={t('例：5s / 快速')}
                                                                                             disabled={!isEditing}
                                                                                             className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30537,7 +30539,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     </div>
                                                                     <div className="col-span-4">
                                                                         <TagListEditor
-                                                                            label="视频分辨率"
+                                                                            label={t('视频分辨率')}
                                                                             values={videoResolutionValues}
                                                                             onChange={(values) => {
                                                                                 const nextNotes = { ...videoResolutionNotes };
@@ -30546,7 +30548,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 });
                                                                                 updateModelLibraryEntry(entry.id, { videoResolutions: values, videoResolutionNotes: nextNotes });
                                                                             }}
-                                                                            placeholder="例：720P,1080P"
+                                                                            placeholder={t('例：720P,1080P')}
                                                                             disabled={!isEditing}
                                                                             theme={theme}
                                                                             normalizeItem={(value) => normalizeVideoResolution(value)}
@@ -30555,7 +30557,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         {videoResolutionValues.length > 0 && (
                                                                             <div className="mt-1 space-y-1">
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                         <input
                                                                                             type="checkbox"
@@ -30563,13 +30565,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryEntry(entry.id, { videoResolutionNotesEnabled: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>启用</span>
+                                                                                        <span>{t('启用')}</span>
                                                                                     </label>
-                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                    <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                     <button
                                                                                         onClick={() => toggleLibraryNotesCollapsed(entry.id, 'video-resolution')}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                        title={isLibraryNotesCollapsed(entry.id, 'video-resolution') ? '展开提示' : '折叠提示'}
+                                                                                        title={isLibraryNotesCollapsed(entry.id, 'video-resolution') ? t('展开提示') : t('折叠提示')}
                                                                                     >
                                                                                         <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, 'video-resolution') ? '' : 'rotate-180'}`} />
                                                                                     </button>
@@ -30589,7 +30591,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                 }
                                                                                                 updateModelLibraryEntry(entry.id, { videoResolutionNotes: nextNotes });
                                                                                             }}
-                                                                                            placeholder="例：16:9 / 竖屏"
+                                                                                            placeholder={t('例：16:9 / 竖屏')}
                                                                                             disabled={!isEditing}
                                                                                             className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30610,7 +30612,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 className="w-3 h-3 cursor-pointer"
                                                                                 disabled={!isEditing}
                                                                             />
-                                                                            <span>首尾帧</span>
+                                                                            <span>{t('首尾帧')}</span>
                                                                         </label>
                                                                         <label className={`flex items-center gap-1 text-[10px] ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>
                                                                             <input
@@ -30627,7 +30629,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                             )}
                                                             <div className="space-y-2">
                                                                 <div className="flex items-center justify-between">
-                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>自定义参数</label>
+                                                                    <label className={`text-[9px] font-medium uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('自定义参数')}</label>
                                                                     <button
                                                                         onClick={() => addModelLibraryCustomParam(entry.id)}
                                                                         disabled={!isEditing || customParams.length >= MAX_CUSTOM_PARAMS}
@@ -30656,7 +30658,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     <input
                                                                                         value={param.name || ''}
                                                                                         onChange={(e) => updateModelLibraryCustomParam(entry.id, param.id, { name: e.target.value })}
-                                                                                        placeholder="参数名（如 size / quality / model）"
+                                                                                        placeholder={t('参数名（如 size / quality / model）')}
                                                                                         disabled={!isEditing}
                                                                                         className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                             ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30670,19 +30672,19 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             onChange={(e) => updateModelLibraryCustomParam(entry.id, param.id, { override: e.target.checked })}
                                                                                             disabled={!isEditing}
                                                                                         />
-                                                                                        <span>覆盖同名参数</span>
+                                                                                        <span>{t('覆盖同名参数')}</span>
                                                                                     </label>
                                                                                     <button
                                                                                         onClick={() => deleteModelLibraryCustomParam(entry.id, param.id)}
                                                                                         disabled={!isEditing}
                                                                                         className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-red-400' : 'text-zinc-400 hover:text-red-500'} ${!isEditing ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                                                                        title="删除参数"
+                                                                                        title={t('删除参数')}
                                                                                     >
                                                                                         <Trash2 size={12} />
                                                                                     </button>
                                                                                 </div>
                                                                                 <TagListEditor
-                                                                                    label="参数值"
+                                                                                    label={t('参数值')}
                                                                                     values={paramValues}
                                                                                     onChange={(values) => {
                                                                                         const nextNotes = { ...paramNotes };
@@ -30691,7 +30693,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         });
                                                                                         updateModelLibraryCustomParam(entry.id, param.id, { values, valueNotes: nextNotes });
                                                                                     }}
-                                                                                    placeholder="例：1024x1024,2K,low,high"
+                                                                                    placeholder={t('例：1024x1024,2K,low,high')}
                                                                                     disabled={!isEditing}
                                                                                     theme={theme}
                                                                                     formatItem={(value) => getCustomParamValueLabel(param, value)}
@@ -30700,7 +30702,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 {paramValues.length > 0 && (
                                                                                     <div className="space-y-1">
                                                                                         <div className="flex items-center gap-2">
-                                                                                            <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>映射提示名</div>
+                                                                                            <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('映射提示名')}</div>
                                                                                             <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                                 <input
                                                                                                     type="checkbox"
@@ -30708,13 +30710,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                     onChange={(e) => updateModelLibraryCustomParam(entry.id, param.id, { notesEnabled: e.target.checked })}
                                                                                                     disabled={!isEditing}
                                                                                                 />
-                                                                                                <span>启用</span>
+                                                                                                <span>{t('启用')}</span>
                                                                                             </label>
-                                                                                            <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>仅用于辅助选择</span>
+                                                                                            <span className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>{t('仅用于辅助选择')}</span>
                                                                                             <button
                                                                                                 onClick={() => toggleLibraryNotesCollapsed(entry.id, `param-${param.id}`)}
                                                                                                 className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                                title={isLibraryNotesCollapsed(entry.id, `param-${param.id}`) ? '展开提示' : '折叠提示'}
+                                                                                                title={isLibraryNotesCollapsed(entry.id, `param-${param.id}`) ? t('展开提示') : t('折叠提示')}
                                                                                             >
                                                                                                 <ChevronDown size={12} className={`transition-transform ${isLibraryNotesCollapsed(entry.id, `param-${param.id}`) ? '' : 'rotate-180'}`} />
                                                                                             </button>
@@ -30734,7 +30736,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                                         }
                                                                                                         updateModelLibraryCustomParam(entry.id, param.id, { valueNotes: nextNotes });
                                                                                                     }}
-                                                                                                    placeholder="例：1:1 / 高清"
+                                                                                                    placeholder={t('例：1:1 / 高清')}
                                                                                                     disabled={!isEditing}
                                                                                                     className={`flex-1 text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                                         ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
@@ -30752,7 +30754,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         ))}
                                                                     </div>
                                                                 ) : (
-                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-400'}`}>未设置自定义参数</div>
+                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-400'}`}>{t('未设置自定义参数')}</div>
                                                                 )}
                                                             </div>
                                                             <div className={`rounded-md border p-2 ${theme === 'dark'
@@ -30760,7 +30762,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5]' : 'bg-zinc-50 border-zinc-200'
                                                                 }`}>
                                                                 <div className="flex items-center justify-between mb-2">
-                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求模板</div>
+                                                                    <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('请求模板')}</div>
                                                                     <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                         <input
                                                                             type="checkbox"
@@ -30768,12 +30770,12 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             onChange={(e) => updateRequestTemplate({ enabled: e.target.checked })}
                                                                             disabled={!isEditing}
                                                                         />
-                                                                        <span>启用</span>
+                                                                        <span>{t('启用')}</span>
                                                                     </label>
                                                                 </div>
                                                                 <div className="grid grid-cols-12 gap-2">
                                                                     <div className="col-span-7 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求路径</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('请求路径')}</label>
                                                                         <input
                                                                             value={requestTemplateValue?.endpoint || ''}
                                                                             onChange={(e) => updateRequestTemplate({ endpoint: e.target.value })}
@@ -30786,7 +30788,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         />
                                                                     </div>
                                                                     <div className="col-span-2 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>方法</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('方法')}</label>
                                                                         <select
                                                                             value={requestTemplateValue?.method || 'POST'}
                                                                             onChange={(e) => updateRequestTemplate({ method: e.target.value })}
@@ -30829,7 +30831,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 </div>
                                                                 <div className="grid grid-cols-12 gap-2 mt-2">
                                                                     <div className="col-span-6 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求头（JSON）</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('请求头（JSON）')}</label>
                                                                         <textarea
                                                                             value={requestTemplateDraft.headers}
                                                                             onChange={(e) => setLibraryRequestTemplateDrafts(prev => ({
@@ -30844,7 +30846,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         />
                                                                     </div>
                                                                     <div className="col-span-6 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求体（JSON / Raw）</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('请求体（JSON / Raw）')}</label>
                                                                         <textarea
                                                                             value={requestTemplateDraft.body}
                                                                             onChange={(e) => setLibraryRequestTemplateDrafts(prev => ({
@@ -30893,7 +30895,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                 </div>
                                                                 <div className="grid grid-cols-12 gap-2 mt-2">
                                                                     <div className="col-span-4 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>超时（ms）</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('超时（ms）')}</label>
                                                                         <input
                                                                             type="number"
                                                                             min="0"
@@ -30910,7 +30912,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         />
                                                                     </div>
                                                                     <div className="col-span-8 space-y-1">
-                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>响应解析器</label>
+                                                                        <label className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('响应解析器')}</label>
                                                                         <input
                                                                             value={requestTemplateDraft.responseParser}
                                                                             onChange={(e) => setLibraryRequestTemplateDrafts(prev => ({
@@ -30918,7 +30920,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                 [entry.id]: { ...requestTemplateDraft, responseParser: e.target.value }
                                                                             }))}
                                                                             disabled={!isEditing}
-                                                                            placeholder="例如：openai.image / jimeng.video"
+                                                                            placeholder={t('例如：openai.image / jimeng.video')}
                                                                             className={`w-full text-[10px] rounded px-2 py-1 border outline-none ${theme === 'dark'
                                                                                 ? 'bg-zinc-900 border-zinc-800 text-zinc-300 placeholder-zinc-600'
                                                                                 : 'bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400'
@@ -31016,7 +31018,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     : theme === 'solarized' ? 'bg-[#fdf6e3] border-[#eee8d5]' : 'bg-zinc-50 border-zinc-200'
                                                                     }`}>
                                                                     <div className="flex items-center justify-between mb-1">
-                                                                        <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>请求预览（JSON）</div>
+                                                                        <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('请求预览（JSON）')}</div>
                                                                         <div className="flex items-center gap-2">
                                                                             <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                 <input
@@ -31024,7 +31026,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     checked={!!entry.previewOverrideEnabled}
                                                                                     onChange={(e) => updateModelLibraryEntry(entry.id, { previewOverrideEnabled: e.target.checked })}
                                                                                 />
-                                                                                <span>修改覆盖</span>
+                                                                                <span>{t('修改覆盖')}</span>
                                                                             </label>
                                                                             <button
                                                                                 onClick={() => {
@@ -31051,7 +31053,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                     }
                                                                                 }}
                                                                                 className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                title={isPreviewEditing ? '取消编辑' : '编辑预览'}
+                                                                                title={isPreviewEditing ? t('取消编辑') : t('编辑预览')}
                                                                             >
                                                                                 <Edit3 size={12} className={isPreviewEditing ? 'text-blue-500' : ''} />
                                                                             </button>
@@ -31116,7 +31118,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
                                                                                         }`}
                                                                                 >
-                                                                                    取消
+                                                                                    {t('取消')}
                                                                                 </button>
                                                                             </div>
                                                                         </div>
@@ -31125,13 +31127,13 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                             {JSON.stringify(previewPayload, null, 2)}
                                                                         </pre>
                                                                     )}
-                                                                    <div className={`text-[9px] mt-2 mb-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>Python 示例</div>
+                                                                    <div className={`text-[9px] mt-2 mb-1 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('Python 示例')}</div>
                                                                     <pre className={`text-[9px] whitespace-pre-wrap ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
                                                                         {previewPython}
                                                                     </pre>
                                                                     <div className="mt-3 pt-2 border-t border-dashed border-zinc-400/30">
                                                                         <div className="flex items-center justify-between mb-1">
-                                                                            <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>最终请求预览</div>
+                                                                            <div className={`text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>{t('最终请求预览')}</div>
                                                                             <div className="flex items-center gap-2">
                                                                                 <label className={`flex items-center gap-1 text-[9px] ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-600'}`}>
                                                                                     <input
@@ -31139,7 +31141,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         checked={!!entry.requestOverrideEnabled}
                                                                                         onChange={(e) => updateModelLibraryEntry(entry.id, { requestOverrideEnabled: e.target.checked })}
                                                                                     />
-                                                                                    <span>修改覆盖</span>
+                                                                                    <span>{t('修改覆盖')}</span>
                                                                                 </label>
                                                                                 <button
                                                                                     onClick={() => {
@@ -31166,14 +31168,14 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                         }
                                                                                     }}
                                                                                     className={`p-1 rounded ${theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                                                                                    title={isRequestPreviewEditing ? '取消编辑' : '编辑请求'}
+                                                                                    title={isRequestPreviewEditing ? t('取消编辑') : t('编辑请求')}
                                                                                 >
                                                                                     <Edit3 size={12} className={isRequestPreviewEditing ? 'text-blue-500' : ''} />
                                                                                 </button>
                                                                             </div>
                                                                         </div>
                                                                         <div className={`text-[9px] mb-1 ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                                                                            模板状态：{requestTemplateEnabled ? '已启用' : '未启用'} · BodyType: {requestTemplateValue?.bodyType || 'json'}
+                                                                            模板状态：{requestTemplateEnabled ? t('已启用') : t('未启用')} · BodyType: {requestTemplateValue?.bodyType || 'json'}
                                                                         </div>
                                                                         {isRequestPreviewEditing ? (
                                                                             <div className="space-y-2">
@@ -31233,7 +31235,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                                             : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
                                                                                             }`}
                                                                                     >
-                                                                                        取消
+                                                                                        {t('取消')}
                                                                                     </button>
                                                                                 </div>
                                                                             </div>
@@ -31256,7 +31258,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                             )}
 
                             <div className={`pt-2 flex justify-end gap-2 border-t mt-3 ${theme === 'dark' ? 'border-zinc-800' : 'border-zinc-200'}`}>
-                                <Button variant="secondary" onClick={() => setSettingsOpen(false)}>关闭</Button>
+                                <Button variant="secondary" onClick={() => setSettingsOpen(false)}>{t('关闭')}</Button>
                             </div>
 
 
@@ -31305,7 +31307,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                     : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
                                                     }`}
                                             >
-                                                {batchSelectedIds.size === history.length ? '取消全选' : '全选'}
+                                                {batchSelectedIds.size === history.length ? t('取消全选') : t('全选')}
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -31392,7 +31394,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                         batchSelectedIds.has(item.id) && (item.url || item.localCacheUrl || item.originalUrl || item.mjOriginalUrl)
                                                     );
                                                     if (selectedItems.length === 0) {
-                                                        alert('选中的项目中没有有效的素材');
+                                                        alert(t('选中的项目中没有有效的素材'));
                                                         return;
                                                     }
 
@@ -31539,7 +31541,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                         ? 'bg-black/60 text-white hover:bg-black/80'
                                                                         : 'bg-white/80 text-zinc-700 hover:bg-white'
                                                                         }`}
-                                                                    title="查看大图 (双击也可查看)"
+                                                                    title={t('查看大图 (双击也可查看)')}
                                                                 >
                                                                     <Maximize2 size={14} />
                                                                 </button>
@@ -31612,7 +31614,7 @@ ${inputText.substring(0, 15000)} ... (截断)
                                                                     <LazyBase64Image
                                                                         src={resolvedDisplayUrl}
                                                                         className="w-full h-full object-contain"
-                                                                        alt="生成图"
+                                                                        alt={t('生成图')}
                                                                         onError={(e) => {
                                                                             e.target.style.display = 'none';
                                                                         }}
@@ -31688,4 +31690,7 @@ ${inputText.substring(0, 15000)} ... (截断)
 }
 
 export default TapnowApp;
+
+
+
 

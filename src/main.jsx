@@ -2,9 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import i18n from './i18n'
 
 const BOOT_TIMEOUT_MS = 5000
 const rootElement = document.getElementById('root')
+const t = i18n.t.bind(i18n)
 
 window.__APP_BOOTED__ = false
 window.__APP_ERRORS__ = window.__APP_ERRORS__ || []
@@ -57,12 +59,12 @@ const renderFallbackDom = (error, meta = {}) => {
     rootElement.innerHTML = `
       <div style="position:fixed;inset:0;background:#0b0b0c;color:#f3f3f3;display:flex;align-items:center;justify-content:center;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;">
         <div style="width:min(900px,92vw);background:#141416;border:1px solid #2a2a2d;border-radius:12px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
-          <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Tapnow 启动失败</div>
-          <div style="font-size:12px;color:#b6b6c2;margin-bottom:16px;">应用启动过程中发生异常，已启用黑屏保护。</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px;">${t('Tapnow 启动失败')}</div>
+          <div style="font-size:12px;color:#b6b6c2;margin-bottom:16px;">${t('应用启动过程中发生异常，已启用黑屏保护。')}</div>
           <div style="background:#0f0f12;border:1px solid #2a2a2d;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:240px;overflow:auto;">${payload.replace(/</g, '&lt;')}</div>
           <div style="display:flex;gap:10px;margin-top:16px;">
-            <button id="tapnow-reload" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">重新加载</button>
-            <button id="tapnow-copy" style="background:#27272a;color:#fff;border:1px solid #3f3f46;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">复制错误详情</button>
+            <button id="tapnow-reload" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">${t('重新加载')}</button>
+            <button id="tapnow-copy" style="background:#27272a;color:#fff;border:1px solid #3f3f46;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer;">${t('复制错误详情')}</button>
           </div>
         </div>
       </div>
@@ -99,12 +101,12 @@ const FatalScreen = ({ error, meta }) => {
     return (
         <div style={{ position: 'fixed', inset: 0, background: '#0b0b0c', color: '#f3f3f3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui,Segoe UI,Roboto,Helvetica,Arial' }}>
             <div style={{ width: 'min(900px,92vw)', background: '#141416', border: '1px solid #2a2a2d', borderRadius: 12, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Tapnow 启动失败</div>
-                <div style={{ fontSize: 12, color: '#b6b6c2', marginBottom: 16 }}>应用启动过程中发生异常，已启用黑屏保护。</div>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{t('Tapnow 启动失败')}</div>
+                <div style={{ fontSize: 12, color: '#b6b6c2', marginBottom: 16 }}>{t('应用启动过程中发生异常，已启用黑屏保护。')}</div>
                 <div style={{ background: '#0f0f12', border: '1px solid #2a2a2d', borderRadius: 8, padding: 12, fontSize: 12, whiteSpace: 'pre-wrap', maxHeight: 240, overflow: 'auto' }}>{payload}</div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                    <button onClick={() => window.location.reload()} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>重新加载</button>
-                    <button onClick={() => copyText(payload)} style={{ background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>复制错误详情</button>
+                    <button onClick={() => window.location.reload()} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>{t('重新加载')}</button>
+                    <button onClick={() => copyText(payload)} style={{ background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 8, padding: '8px 12px', fontSize: 12, cursor: 'pointer' }}>{t('复制错误详情')}</button>
                 </div>
             </div>
         </div>
@@ -144,7 +146,7 @@ const BootGuard = ({ children }) => {
     }, [])
 
     if (timedOut) {
-        return <FatalScreen error={new Error('启动超时')} meta={{ type: 'boot_timeout' }} />
+        return <FatalScreen error={new Error(t('启动超时'))} meta={{ type: 'boot_timeout' }} />
     }
     return children
 }

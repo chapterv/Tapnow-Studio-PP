@@ -1,4 +1,7 @@
+import i18n from './i18n';
+
 // V3.5.0: 使用 JSZip 批量打包下载
+const t = i18n.t.bind(i18n);
 const downloadSelectedHistory = async () => {
     const selectedIds = Array.from(historySelection);
     if (selectedIds.length === 0) return;
@@ -25,10 +28,10 @@ const downloadSelectedHistory = async () => {
                 a.download = filename;
                 a.click();
             }
-            toast.success('下载已开始');
+            toast.success(t('下载已开始'));
         } catch (e) {
             console.error('下载失败:', e);
-            toast.error('下载失败');
+            toast.error(t('下载失败'));
         }
         return;
     }
@@ -36,7 +39,7 @@ const downloadSelectedHistory = async () => {
     const zip = new JSZip();
     let count = 0;
     const total = selectedIds.length;
-    const toastId = toast.loading(`正在打包 ${total} 个项目...`);
+    const toastId = toast.loading(`${t('正在打包')} ${total} ${t('个项目')}...`);
 
     try {
         for (const id of selectedIds) {
@@ -93,7 +96,7 @@ const downloadSelectedHistory = async () => {
         }
 
         if (count === 0) {
-            toast.error('没有可下载的有效资源', { id: toastId });
+            toast.error(t('没有可下载的有效资源'), { id: toastId });
             return;
         }
 
@@ -103,9 +106,9 @@ const downloadSelectedHistory = async () => {
         const timestamp = `${now.getFullYear().toString().slice(2)}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}-${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
         saveAs(content, `tapnow-assets-${timestamp}.zip`);
 
-        toast.success(`打包完成，已下载 ${count} 个文件`, { id: toastId });
+        toast.success(`${t('打包完成，已下载')} ${count} ${t('个文件')}`, { id: toastId });
     } catch (e) {
         console.error('打包过程出错:', e);
-        toast.error('打包失败，请查看控制台', { id: toastId });
+        toast.error(t('打包失败，请查看控制台'), { id: toastId });
     }
 };

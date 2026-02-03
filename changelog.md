@@ -2,6 +2,10 @@
 
 本文档记录了 Tapnow Studio 近期的所有关键更新、修复和功能改进。
 
+#### 2026-02-03 开发中改动（3.8.4-rc1）
+- **[新增]** 本地 ComfyUI 中间件 v2.3：兼容 BizyAir/RunningHub 接口，补齐 create/detail/outputs。
+- **[新增]** 本地 ComfyUI 测试指引文档（含 BizyAir/RunningHub/Prompt 三种测试路径）。
+
 #### 2026-02-02 已验证（3.8.3）
 - **[新增]** 模型库：单模型导入/导出 + 复制模型快速复用配置。
 - **[新增]** 模板变量扩展：支持 imageUrl1/2/3/4 等多图输入变量。

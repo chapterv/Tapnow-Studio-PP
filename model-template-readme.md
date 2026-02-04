@@ -82,9 +82,9 @@
 
 ### 4.1 workflow 准备
 1. ComfyUI 导出 API JSON（DevMode → Export API）。
-2. 新建目录：`localserver/comfy-middleware/workflows/<app_id>/`
+2. 新建目录：`localserver/workflows/<app_id>/`
 3. 将 JSON 重命名为 `template.json` 放入目录。
-4. 执行：`prepare_workflow_templates.bat` 自动生成 `meta.json`。
+4. 执行：`prepare_workflow_templates.bat` 自动生成 `meta.json`（路径：`localserver/workflows/`）。
 
 > `app_id = 目录名 = 模型库里的模型ID`。
 > 脚本会自动生成常用参数映射（prompt/seed/steps/width/height/batch/sampler/scheduler），
@@ -211,7 +211,9 @@
 2) **要随机**时：不要传 `seed`（留空），让 workflow 使用自身默认值。  
 3) **要固定**时：填一个具体整数。  
 
-> 如果你的 workflow 默认种子是固定的（比如 0），想每次不同，请在 ComfyUI 内部把 seed 默认值改成 `-1` 或开启随机化选项，再导出 `template.json`。
+> 如果你的 workflow 默认种子是固定的（比如 0），想每次不同：  
+> - 本地中间件支持 `seed = -1` 自动随机。  
+> - 或在 ComfyUI 内部把 seed 默认值改成随机逻辑，再导出 `template.json`。
 
 ### 9.2 采样器 / 调度器切换
 在 ComfyUI 中对应输入一般是：

@@ -18,6 +18,7 @@ Tapnow Studio 本地全功能服务器 (Tapnow Local Server Full)
 import os
 import sys
 import json
+import random
 import base64
 import argparse
 import threading
@@ -360,6 +361,16 @@ class ComfyMiddleware:
         return val
 
     @staticmethod
+    def normalize_seed_value(value):
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip() == '-1':
+            return random.randint(0, 2**31 - 1)
+        if isinstance(value, (int, float)) and int(value) == -1:
+            return random.randint(0, 2**31 - 1)
+        return value
+
+    @staticmethod
     def set_by_path(target, path_parts, value):
         current = target
         for part in path_parts[:-1]:
@@ -372,6 +383,24 @@ class ComfyMiddleware:
             current[path_parts[-1]] = value
             return True
         return False
+
+    @staticmethod
+    def extract_batch_size(workflow):
+        try:
+            for node in workflow.values():
+                if not isinstance(node, dict):
+                    continue
+                inputs = node.get('inputs')
+                if not isinstance(inputs, dict):
+                    continue
+                if 'batch_size' in inputs:
+                    try:
+                        return int(inputs.get('batch_size') or 1)
+                    except Exception:
+                        return 1
+        except Exception:
+            return 1
+        return 1
     
     @staticmethod
     def is_enabled():
@@ -414,6 +443,8 @@ class ComfyMiddleware:
                 if isinstance(raw_value, str) and raw_value.strip() == '':
                     continue
                 value = ComfyMiddleware.coerce_value(raw_value)
+                if field == 'seed':
+                    value = ComfyMiddleware.normalize_seed_value(value)
                 if node_id in workflow:
                     inputs = workflow[node_id].setdefault('inputs', {})
                     if isinstance(inputs, dict):
@@ -444,6 +475,8 @@ class ComfyMiddleware:
                 node_id = str(mapping.get('node_id', '')).strip()
                 field_path = (mapping.get('field', '') or '').split('.')
                 if node_id in workflow and field_path and field_path[0]:
+                    if field_path[-1] == 'seed':
+                        value = ComfyMiddleware.normalize_seed_value(value)
                     target = workflow[node_id]
                     if not ComfyMiddleware.set_by_path(target, field_path, value):
                         log(f"[Comfy] 参数填充失败 {key}: 无法写入路径 {field_path}")
@@ -456,6 +489,8 @@ class ComfyMiddleware:
                 node_id = node_part.strip()
                 field_name = field_part.split('.')[-1].strip() if field_part else ''
                 if node_id in workflow and field_name:
+                    if field_name == 'seed':
+                        value = ComfyMiddleware.normalize_seed_value(value)
                     inputs = workflow[node_id].setdefault('inputs', {})
                     if isinstance(inputs, dict):
                         inputs[field_name] = value
@@ -468,6 +503,8 @@ class ComfyMiddleware:
                 node_id = node_part.strip()
                 field_name = field_name.strip()
                 if node_id in workflow and field_name:
+                    if field_name == 'seed':
+                        value = ComfyMiddleware.normalize_seed_value(value)
                     inputs = workflow[node_id].setdefault('inputs', {})
                     if isinstance(inputs, dict):
                         inputs[field_name] = value
@@ -494,6 +531,8 @@ class ComfyMiddleware:
                     if len(matches) == 1:
                         inputs = workflow[matches[0]].setdefault('inputs', {})
                         if isinstance(inputs, dict):
+                            if key == 'seed':
+                                value = ComfyMiddleware.normalize_seed_value(value)
                             inputs[key] = value
                         handled = True
         return workflow
@@ -608,12 +647,19 @@ class ComfyMiddleware:
                 with STATUS_LOCK:
                     JOB_STATUS[job_id]['prompt_id'] = prompt_id
                 PROMPT_TO_JOB[prompt_id] = job_id
+                expected_count = 1
+                try:
+                    expected_count = max(1, int(ComfyMiddleware.extract_batch_size(wf)))
+                except Exception:
+                    expected_count = 1
                 
                 # 等待结果 (简化版 Event Loop)
                 timeout = 600
                 start_t = time.time()
                 final_images = []
                 
+                last_count = 0
+                stable_ticks = 0
                 while time.time() - start_t < timeout:
                     if prompt_id in WS_MESSAGES:
                         msgs = WS_MESSAGES[prompt_id]
@@ -623,8 +669,15 @@ class ComfyMiddleware:
                             for img in outputs:
                                 url = f"{COMFY_URL}/view?filename={img['filename']}&type={img['type']}&subfolder={img['subfolder']}"
                                 final_images.append(url)
-                        if final_images: 
-                            break # 暂时假设只要有一张图就算完成
+                        if len(final_images) >= expected_count:
+                            break
+                        if len(final_images) == last_count and final_images:
+                            stable_ticks += 1
+                            if stable_ticks >= 3:
+                                break
+                        else:
+                            stable_ticks = 0
+                            last_count = len(final_images)
                     time.sleep(0.5)
                 
                 if final_images:

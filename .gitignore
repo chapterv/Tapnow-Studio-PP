@@ -16,7 +16,10 @@ codex.md
 thumbs.db
 .gitignore
 localserver/__pycache__/
+localserver/comfy-middleware/
 localserver/comfy-middleware/__pycache__/
+localserver/workflows/*/
+localserver/comfy-middleware/workflows/*/
 localserver/原版连接器/
 Tapnow Studio-V*.html
 !Tapnow Studio-V3.7.34.html

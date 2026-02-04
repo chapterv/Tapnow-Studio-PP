@@ -96,26 +96,73 @@
 - 接口类型：OpenAI
 
 ### 4.3 模型库请求模板（推荐）
+> 结论：**你传的是“参数名”，Comfy 只认“节点输入名”**。  
+> 所以 `batch_input=4` 如果没有正确映射，会被 Comfy 当作无效字段，最终仍使用默认值。
+
+**方式 A：模板里直接写节点字段（不改 meta.json，最稳）**
 ```json
 {
   "web_app_id": "{{modelName}}",
   "input_values": {
-    "prompt": "{{prompt}}",
-    "seed": {{seed:number}},
-    "steps": {{steps:number}},
-    "width": {{width:number}},
-    "height": {{height:number}}
+    "44:KSampler.seed": {{seed:number}},
+    "44:KSampler.steps": {{steps:number}},
+    "44:KSampler.sampler_name": "{{sampler}}",
+    "44:KSampler.scheduler": "{{scheduler}}",
+    "41:EmptySD3LatentImage.width": {{width:number}},
+    "41:EmptySD3LatentImage.height": {{height:number}},
+    "41:EmptySD3LatentImage.batch_size": {{batch:number}}
   }
 }
 ```
 
-> 说明：系统会优先使用 `meta.json` 映射；若缺失，会用通用键名兜底。
+**方式 B：通过 meta.json 映射（推荐）**
+```json
+{
+  "params_map": {
+    "seed":      { "node_id": "44", "field": "inputs.seed" },
+    "steps":     { "node_id": "44", "field": "inputs.steps" },
+    "sampler":   { "node_id": "44", "field": "inputs.sampler_name" },
+    "scheduler": { "node_id": "44", "field": "inputs.scheduler" },
+    "width":     { "node_id": "41", "field": "inputs.width" },
+    "height":    { "node_id": "41", "field": "inputs.height" },
+    "batch":     { "node_id": "41", "field": "inputs.batch_size" }
+  }
+}
+```
+
+模板可简化为：
+```json
+{
+  "web_app_id": "{{modelName}}",
+  "input_values": {
+    "seed": {{seed:number}},
+    "steps": {{steps:number}},
+    "sampler": "{{sampler}}",
+    "scheduler": "{{scheduler}}",
+    "width": {{width:number}},
+    "height": {{height:number}},
+    "batch": {{batch:number}}
+  }
+}
+```
+
+**如何找 node id**  
+在 `template.json` 里搜索：
+```
+"class_type": "KSampler"
+"class_type": "EmptySD3LatentImage" 或 "EmptyLatentImage"
+```
+对应对象的 key 就是 `node_id`。
+
+> 说明：系统会优先使用 `meta.json` 映射；若缺失，会用通用键名兜底。  
 > 若希望 UI 出现可输入框，请在模型库「自定义参数」里添加对应参数，
-> 且参数名包含 `input`（如 `seed_input` / `steps_input` / `sampler_input` / `batch_input`）。
+> 且参数名包含 `input`（如 `seed_input` / `steps_input` / `sampler_input` / `batch_input`）。  
+> **注意**：`_input` 只是 UI 输入提示，不等于 Comfy 节点输入名。
 
 ### 4.4 批量与调度参数（Batch/Sampler/Scheduler）
-模型库若需暴露更多 ComfyUI 控制能力，可添加下述字段到请求模板：
+模型库若需暴露更多 ComfyUI 控制能力，可用 **方式 A（直接写节点字段）** 或 **方式 B（meta.json 映射）**。
 
+**方式 A（直接写节点字段）**
 ```json
 {
   "input_values": {
@@ -126,9 +173,20 @@
 }
 ```
 
+**方式 B（meta.json）**
+```json
+{
+  "params_map": {
+    "batch": { "node_id": "41", "field": "inputs.batch_size" },
+    "sampler": { "node_id": "44", "field": "inputs.sampler_name" },
+    "scheduler": { "node_id": "44", "field": "inputs.scheduler" }
+  }
+}
+```
+
 * `batch`：映射到 `batch_size` 或 `sampler.batch_size`。
-* `sampler`：对应 `sampler_name`，可填 `euler_a`, `dpmpp_2m`, `dpmpp_3m`, `ddim` 等 ComfyUI 选项。
-* `scheduler`：对应 scheduler 输入（如 `beta`、`karras`、`normal`）。
+* `sampler`：常见 `euler / euler_a / dpmpp_2m / dpmpp_2m_sde`。
+* `scheduler`：常见 `normal / karras / exponential`。
 
 **提示**：在模型库自定义参数中增加 `batch_input`、`sampler_input`、`scheduler_input`，即可在 UI 显示输入框，方便用户实时调整。
 
@@ -227,12 +285,17 @@
 ### 9.1 种子随机（Seed）
 **推荐做法：**
 1) 在模型库中保留 `seed` 输入（如 `seed_input`）。  
-2) **要随机**时：不要传 `seed`（留空），让 workflow 使用自身默认值。  
+2) **要随机**时：  
+   - 可不传 `seed`（留空），让 workflow 使用自身默认值；  
+   - 或传一个新的正整数（最稳）；  
+   - 本地中间件支持 `seed = -1` → 自动随机。  
 3) **要固定**时：填一个具体整数。  
 
-> 如果你的 workflow 默认种子是固定的（比如 0），想每次不同：  
-> - 本地中间件支持 `seed = -1` 自动随机。  
-> - 或在 ComfyUI 内部把 seed 默认值改成随机逻辑，再导出 `template.json`。
+> ComfyUI 的 KSampler 默认 seed 最小值是 0，`-1` 在原生 ComfyUI 并非标准随机值。  
+> **只有本地中间件才会将 `-1` 转成随机**，因此推荐在本地通过中间件调用。  
+> 若 workflow 默认 seed 是固定的（如 0），且你希望每次随机：  
+> - 加 `RandomSeed` 节点并映射；  
+> - 或在 ComfyUI 中改 seed 默认逻辑后重新导出 `template.json`。
 
 ### 9.2 采样器 / 调度器切换
 在 ComfyUI 中对应输入一般是：
@@ -262,10 +325,27 @@ ComfyUI 常见节点字段：`batch_size`
 - 或通过 `meta.json` 把 `batch` 映射到 `inputs.batch_size`。
 
 > 如果你的 workflow 使用的是其他节点（如 EmptyLatentImage/SDXL），请以实际节点 ID 为准。
+> 若输出仍只有 1 张图，确认输出节点使用 **SaveImage**（PreviewImage 可能只返回第一张）。
 
 - **outputs/detail 404**
   - requestId 不完整（UUID 被截断）。
   - 使用 create 返回的完整 requestId。
+
+- **直接排查 /outputs 响应**
+  - 通过 curl 验证：
+    ```bash
+    curl "http://127.0.0.1:9527/w/v1/webapp/task/openapi/outputs?requestId=<id>"
+    ```
+  - 返回结构通常包含：
+    ```json
+    {
+      "data": {
+        "outputs": [{ "object_url": "http://127.0.0.1:8188/view?..." }],
+        "images": ["http://127.0.0.1:8188/view?..."]
+      },
+      "outputs": [{ "object_url": "http://127.0.0.1:8188/view?..." }]
+    }
+    ```
 
 - **图像缓存 404**
   - 原始图片 URL 已失效或被清理。

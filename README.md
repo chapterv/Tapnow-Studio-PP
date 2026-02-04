@@ -10,8 +10,8 @@
 *   **性能专项优化**: 针对超大规模节点图和数千条历史记录进行了渲染优化，支持“极致”性能模式。
 *   **数据持久化**: 彻底解决了 Blob URL 失效问题，所有资产自动同步至本地存储，支持 ZIP 批量导出。
 *   **模型库与请求模板**: 模型能力统一管理，支持请求模板预览/覆盖，便于供应商模型对接。
-*   **模型库说明书**: 统一配置与测试说明见 `model-template-readme.md`。
-*   **本地服务说明书**: 本地 ComfyUI / Proxy / 接收器说明见 `localserver/LocalServer_README`,`localserver/Middleware_README (ComfyUI Proxy).md`。
+*   **模型库说明书**: 统一配置与测试说明见 [**模型库说明**](./model-template-readme.md)。
+*   **本地服务说明书**:  接收器说明见 [**本地服务说明**](./localserver/LocalServer_README.md) 本地 ComfyUI_Proxy参见 [**ComfyUI 代理说明**](./localserver/Middleware_README-ComfyUI.md)
 *   **本地 Jimeng-API 7z 一键包**: 解压后运行，Base URL 指向 `http://localhost:5100`，API Key 使用 `sessionid`。
 *   **国际化基础**: 引入 i18n 基础设施，逐步支持中英文切换与文案维护。
 

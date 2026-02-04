@@ -13,7 +13,8 @@
 - **[修复]** outputs/detail 允许用 prompt_id 作为 requestId 查询结果。
 - **[修复]** ComfyUI /prompt 请求补齐 JSON header，并输出 400 错误体便于排查。
 - **[修复]** 本地 ComfyUI 输入为空时不覆盖模板默认值，避免 400 校验失败。
-- **[文档]** 合并模型库说明书与测试方法为统一版本。
+- **[文档]** 合并模型库说明书与测试方法为统一版本，并在 README 引用。
+- **[优化]** workflows 脚本自动生成常用参数映射（prompt/seed/steps/width/height/batch/sampler/scheduler）。
 
 #### 2026-02-02 已验证（3.8.3）
 - **[新增]** 模型库：单模型导入/导出 + 复制模型快速复用配置。

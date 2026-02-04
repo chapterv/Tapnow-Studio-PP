@@ -87,6 +87,8 @@
 4. 执行：`prepare_workflow_templates.bat` 自动生成 `meta.json`。
 
 > `app_id = 目录名 = 模型库里的模型ID`。
+> 脚本会自动生成常用参数映射（prompt/seed/steps/width/height/batch/sampler/scheduler），
+> 并保留完整的 `nodeId.input` 映射，便于后续精细调整。
 
 ### 4.2 Provider 配置
 - Base URL：`http://127.0.0.1:9527`
@@ -108,6 +110,8 @@
 ```
 
 > 说明：系统会优先使用 `meta.json` 映射；若缺失，会用通用键名兜底。
+> 若希望 UI 出现可输入框，请在模型库「自定义参数」里添加对应参数，
+> 且参数名包含 `input`（如 `seed_input` / `steps_input` / `sampler_input` / `batch_input`）。
 
 ---
 

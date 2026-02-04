@@ -64,3 +64,26 @@ const resp = await fetch(url, {
 - `proxy_allowed_hosts` 为空则代理被禁用。
 - 如需临时允许任意域名，可设置为 `["*"]`（不建议）。
 - `proxy_timeout` 为代理超时秒数，设置为 `0` 表示不超时。
+
+## 本地缓存与保存节点
+Tapnow LocalServer 除了代理，还在后台主动缓存所有通过历史、导出、分享生成的资源。
+
+* **主动缓存逻辑**：每次下载图片/视频时都会写入本地 `save_path`，并自动记录 `hash`，避免重复拉取（即使是在 ComfyUI 生成中）。
+* **保存节点联动**：在 Tapnow Studio 中启用“保存节点”，可把作业链的输出推入本地目录；本地服务会为新文件生成可浏览 URL，方便分享/批量导出。
+* **缓存优先级**：资源加载顺序为 `本地缓存 -> 代理 -> 直连`，确保 CORS 安全且带宽可控。
+
+## ComfyUI 与 CORS
+当 Tapnow Studio 需要访问本地 ComfyUI（`127.0.0.1:8188`）或其他模型服务时，LocalServer 会：
+
+1. 自动添加 `Access-Control-Allow-*` 头，解决浏览器跨域限制。
+2. 将请求通过 `/proxy` 中转（可配置 `proxy_allowed_hosts`）。
+3. 将生成结果写入本地缓存并返回可直接访问的 `object_url`。
+
+### Quick Test
+```bash
+curl http://127.0.0.1:9527/ping
+```
+
+## 关联参考
+* 本地 ComfyUI 配置请看 `localserver/Middleware_README-ComfyUI.md`，其中详细描述模板生成、meta 映射与模型库的引用章节（`model-template-readme.md` 第 4/5/9 章）。
+* 模型库设置请参考 `model-template-readme.md` 以及 `docs/api/模型库测试方法.md` 中的 Batch/Sampler/Scheduler 说明。

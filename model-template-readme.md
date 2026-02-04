@@ -113,6 +113,25 @@
 > 若希望 UI 出现可输入框，请在模型库「自定义参数」里添加对应参数，
 > 且参数名包含 `input`（如 `seed_input` / `steps_input` / `sampler_input` / `batch_input`）。
 
+### 4.4 批量与调度参数（Batch/Sampler/Scheduler）
+模型库若需暴露更多 ComfyUI 控制能力，可添加下述字段到请求模板：
+
+```json
+{
+  "input_values": {
+    "41:EmptySD3LatentImage.batch_size": {{batch:number}},
+    "44:KSampler.sampler_name": "{{sampler}}",
+    "44:KSampler.scheduler": "{{scheduler}}"
+  }
+}
+```
+
+* `batch`：映射到 `batch_size` 或 `sampler.batch_size`。
+* `sampler`：对应 `sampler_name`，可填 `euler_a`, `dpmpp_2m`, `dpmpp_3m`, `ddim` 等 ComfyUI 选项。
+* `scheduler`：对应 scheduler 输入（如 `beta`、`karras`、`normal`）。
+
+**提示**：在模型库自定义参数中增加 `batch_input`、`sampler_input`、`scheduler_input`，即可在 UI 显示输入框，方便用户实时调整。
+
 ---
 
 ## 5. 异步任务（Async Config）

@@ -119,6 +119,15 @@ localserver/
 3. 点击 **Save (API Format)** 按钮。
 4. 将保存的 json 重命名为 `template.json` 并放入对应文件夹。
 
+### 自动生成 meta.json（脚本）
+`localserver/workflows/prepare_workflow_templates.bat`（或 `.ps1`）会遍历所有目录：
+
+* 读取 `template.json`，分析每个节点的 `inputs`。
+* 自动生成 `meta.json` 映射常用字段（prompt/seed/steps/width/height/batch/sampler/scheduler/ratio）。
+* 若需要定制，可以在生成后的 `meta.json` 中手动调整 nodeId 及 field 路径。
+
+只需执行一次 `prepare_workflow_templates.bat`，就可以保持 meta 与 ComfyUI 模板同步。后续模板更新只需再执行一次脚本。
+
 ### 如何配置映射 (meta.json)
 你需要告诉 Middleware，用户的输入 (如 `prompt`) 应该填入哪个节点的哪个字段。
 
@@ -207,3 +216,16 @@ localserver/
     }
   }
   ```
+
+### 4.5 联通测试
+```bash
+curl http://127.0.0.1:9527/comfy/apps
+curl http://127.0.0.1:9527/w/v1/webapp/task/openapi/detail?requestId=<id>
+```
+
+## 5. 模型库配置引用
+本地 ComfyUI 模型推荐通过 `model-template-readme.md` 内的模型库章节配置：
+
+* 章节 4（本地 ComfyUI）详细描述 template/meta/请求模板。
+* 章节 9（参数调节）介绍 batch/sampler/scheduler 输入。
+* 章节 6（BizyAir）可作为参考进行对照配置。

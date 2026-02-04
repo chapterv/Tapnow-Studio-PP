@@ -2028,7 +2028,7 @@ const normalizeJimengVideoDuration = (value, allowed = []) => {
 const isImageModelType = (type) => type === 'Image' || type === 'ChatImage';
 const isChatModelType = (type) => type === 'Chat' || type === 'ChatImage';
 const MAX_CUSTOM_PARAMS = 30;
-const MAX_CUSTOM_PARAM_VALUES = 30;
+const MAX_CUSTOM_PARAM_VALUES = 50;
 const normalizeCustomParamNotes = (notes) => {
     if (!notes || typeof notes !== 'object') return {};
     const next = {};
@@ -12947,7 +12947,8 @@ function TapnowApp() {
                 const isChatImage = config?.type === 'ChatImage';
                 const useAsync = isModelScope ? forceAsync : false;
                 const resolveSourceProxy = (url) => getProxyPreferenceForUrl(url, useProxy);
-                const asyncConfig = normalizeAsyncConfig(config?.asyncConfig);
+                const asyncConfig = normalizeAsyncConfig(config?.asyncConfig)
+                    || ((baseUrl && String(baseUrl).includes('127.0.0.1:9527')) ? normalizeAsyncConfig(ASYNC_CONFIG_TEMPLATE) : null);
 
                 // --- 模型特征定义 (融合 V2.5-3 和 V2.5-4) ---
                 // isBananaLike: 用于旧版/通用香蕉模型 (排除 nano-banana-2)
@@ -13864,7 +13865,14 @@ function TapnowApp() {
                             return;
                         }
                         if (typeof value === 'object') {
-                            const url = value.url || value.image_url || value.imageUrl || value.file_uri || value.fileUri || value.uri;
+                            const url = value.url
+                                || value.image_url
+                                || value.imageUrl
+                                || value.object_url
+                                || value.objectUrl
+                                || value.file_uri
+                                || value.fileUri
+                                || value.uri;
                             if (url) {
                                 collected.add(url);
                                 return;
@@ -13926,8 +13934,10 @@ function TapnowApp() {
                     const fallbackCollections = [
                         data?.images,
                         data?.image,
+                        data?.outputs,
                         data?.data?.images,
                         data?.data?.image,
+                        data?.data?.outputs,
                         data?.result?.images,
                         data?.result?.image,
                         data?.result?.output_images,

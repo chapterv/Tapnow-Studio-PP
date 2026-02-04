@@ -468,6 +468,14 @@ class ComfyMiddleware:
                 continue
             if isinstance(val, str) and val.strip() == '':
                 continue
+            if isinstance(key, str):
+                # 支持前端 *_input 命名（如 seed_input / batch_input）
+                if key.endswith('_input') and len(key) > 6:
+                    key = key[:-6]
+                if key in ('batch_size', 'batchSize'):
+                    key = 'batch'
+                if key in ('sampler_name', 'samplerName'):
+                    key = 'sampler'
             value = ComfyMiddleware.coerce_value(val)
             handled = False
             if key in params_map:
@@ -515,7 +523,14 @@ class ComfyMiddleware:
             if not handled and isinstance(key, str):
                 alias_map = {
                     "prompt": ["text", "prompt"],
-                    "text": ["text", "prompt"]
+                    "text": ["text", "prompt"],
+                    "seed": ["seed"],
+                    "steps": ["steps"],
+                    "width": ["width"],
+                    "height": ["height"],
+                    "batch": ["batch_size", "batch"],
+                    "sampler": ["sampler_name", "sampler"],
+                    "scheduler": ["scheduler"]
                 }
                 if key in alias_map:
                     for input_name in alias_map[key]:
@@ -523,6 +538,8 @@ class ComfyMiddleware:
                         if len(matches) == 1:
                             inputs = workflow[matches[0]].setdefault('inputs', {})
                             if isinstance(inputs, dict):
+                                if input_name == 'seed':
+                                    value = ComfyMiddleware.normalize_seed_value(value)
                                 inputs[input_name] = value
                             handled = True
                             break
@@ -752,8 +769,10 @@ def build_outputs_response(job):
         "message": "Ok",
         "status": True,
         "data": {
-            "outputs": outputs
-        }
+            "outputs": outputs,
+            "images": images
+        },
+        "outputs": outputs
     }
 
 def resolve_job_by_request_id(request_id):

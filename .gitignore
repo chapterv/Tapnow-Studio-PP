@@ -1,5 +1,6 @@
 node_modules/
 dist/
+# keep docs ignored (internal working docs)
 docs/
 backups/
 .waylog/
